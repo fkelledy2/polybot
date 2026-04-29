@@ -120,14 +120,22 @@ class PolymarketClient:
                 except Exception:
                     pass
 
+            description = (market.get("description") or "").strip()
+            resolution_source = (market.get("resolutionSource") or "").strip()
+            resolution_criteria = description[:400] if description else ""
+            if resolution_source:
+                suffix = f" (Source: {resolution_source})"
+                resolution_criteria = (resolution_criteria + suffix).strip()
+
             return {
-                "question":        market.get("question", "Unknown"),
-                "market_id":       market.get("id"),
-                "yes":             float(prices[0]),
-                "no":              float(prices[1]),
-                "volume_usd":      float(market.get("volume", 0)),
-                "end_date":        end_date_str,
-                "days_to_resolve": round(days_to_resolve, 1) if days_to_resolve is not None else None,
+                "question":             market.get("question", "Unknown"),
+                "market_id":            market.get("id"),
+                "yes":                  float(prices[0]),
+                "no":                   float(prices[1]),
+                "volume_usd":           float(market.get("volume", 0)),
+                "end_date":             end_date_str,
+                "days_to_resolve":      round(days_to_resolve, 1) if days_to_resolve is not None else None,
+                "resolution_criteria":  resolution_criteria,
             }
         except (ValueError, IndexError, json.JSONDecodeError) as e:
             logger.warning(f"Could not parse prices for market: {e}")

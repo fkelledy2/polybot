@@ -10,7 +10,7 @@
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from config import TRADES_DB
@@ -18,6 +18,14 @@ from config import TRADES_DB
 logger = logging.getLogger(__name__)
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS price_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    market_id   TEXT NOT NULL,
+    yes_price   REAL NOT NULL,
+    recorded_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_price_history_market ON price_history (market_id, recorded_at);
+
 CREATE TABLE IF NOT EXISTS predictions (
     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
     market_id             TEXT NOT NULL,
@@ -50,6 +58,78 @@ def init_tracker() -> None:
     conn.commit()
     conn.close()
     logger.debug("Prediction tracker initialised")
+
+
+def record_prices(markets: list[dict]) -> None:
+    """Record current YES prices for all markets. Called each scan for momentum tracking."""
+    if not markets:
+        return
+    ts = datetime.now().isoformat()
+    rows = [
+        (m["market_id"], m["yes"], ts)
+        for m in markets
+        if m.get("market_id") and m.get("yes") is not None
+    ]
+    if not rows:
+        return
+    conn = sqlite3.connect(TRADES_DB)
+    conn.executemany(
+        "INSERT INTO price_history (market_id, yes_price, recorded_at) VALUES (?, ?, ?)",
+        rows,
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_price_velocities(market_ids: list[str]) -> dict[str, float]:
+    """
+    Return 24h price change (current - 24h_ago) for each market as a decimal.
+    Only markets with data in both windows are included.
+    """
+    if not market_ids:
+        return {}
+
+    now = datetime.now()
+    cutoff_low  = (now - timedelta(hours=26)).isoformat()
+    cutoff_high = (now - timedelta(hours=22)).isoformat()
+
+    conn = sqlite3.connect(TRADES_DB)
+    c = conn.cursor()
+    result = {}
+
+    for mid in market_ids:
+        c.execute(
+            "SELECT yes_price FROM price_history WHERE market_id = ? ORDER BY recorded_at DESC LIMIT 1",
+            (mid,),
+        )
+        row = c.fetchone()
+        if not row:
+            continue
+        current_price = row[0]
+
+        c.execute(
+            """SELECT yes_price FROM price_history
+               WHERE market_id = ? AND recorded_at BETWEEN ? AND ?
+               ORDER BY recorded_at ASC LIMIT 1""",
+            (mid, cutoff_low, cutoff_high),
+        )
+        row = c.fetchone()
+        if not row:
+            continue
+
+        result[mid] = round(current_price - row[0], 4)
+
+    conn.close()
+    return result
+
+
+def prune_price_history(days: int = 7) -> None:
+    """Remove price history older than `days` days to keep the DB small."""
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    conn = sqlite3.connect(TRADES_DB)
+    conn.execute("DELETE FROM price_history WHERE recorded_at < ?", (cutoff,))
+    conn.commit()
+    conn.close()
 
 
 def log_signals(signals: list) -> None:

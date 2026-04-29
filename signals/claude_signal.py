@@ -1,22 +1,19 @@
 # signals/claude_signal.py
 # ─────────────────────────────────────────────────────────────
-# This is the "brain" of the bot.
-# We send all markets to Claude in a single batched call, along with:
-#   - The question being asked
-#   - The current market price (implied probability)
-#   - Any elite wallet signals for each market
+# Brain of the bot: sends markets to Claude, returns trade signals.
 #
-# Claude returns a structured JSON array with probability estimates.
-# If Claude's estimate differs significantly from the market price → edge.
+# Sprint 1 upgrades:
+#   S1-1  Prompt caching   — static system prompt cached; ~80% input token reduction
+#   S1-2  Tool use         — structured output via tool definition; no JSON parsing
+#   S1-3  Resolution criteria — injected per-market from Polymarket API
 # ─────────────────────────────────────────────────────────────
 
-import json
 import logging
 import anthropic
 from dataclasses import dataclass
 from typing import Optional
 from config import ANTHROPIC_API_KEY, MIN_EDGE_TO_TRADE, CLAUDE_MODEL
-from signals.categorizer import get_category_context
+from signals.categorizer import get_category_context, CATEGORY_CONTEXT
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +49,82 @@ class TradeSignal:
             f"  Q: {self.question[:70]}...\n"
             f"  Reason: {self.reasoning[:100]}..."
         )
+
+
+# ── Static system prompt (S1-1: cached across calls) ─────────────────────────
+# All category contexts are embedded here so this block exceeds the cache
+# minimum token threshold. The user message carries only the dynamic market list.
+
+_CATEGORY_GUIDANCE = "\n\n".join(
+    f"[{cat}]\n{ctx}" for cat, ctx in sorted(CATEGORY_CONTEXT.items())
+)
+
+_SYSTEM_PROMPT = f"""You are an expert prediction market analyst specialising in Polymarket — a decentralised binary outcome market where prices represent the probability of YES resolving (0.0 = 0%, 1.0 = 100%). Each market settles at $1.00 if YES or $0.00 if NO.
+
+YOUR ROLE:
+Estimate the true probability that the YES outcome resolves for each market. You are looking for mispricings where the market's implied probability materially differs from the true probability based on evidence and base rates.
+
+CORE PRINCIPLES:
+1. Markets are generally efficient. Do not deviate from the market price without a clear, specific reason backed by concrete evidence, known base rates, or a documented information asymmetry. Most markets should receive a probability close to the current price.
+2. Calibration over edge: If you are uncertain, stay close to the market price. 0.52 is a legitimate estimate. Your edge must be earned from analysis, not assumed.
+3. Resolution criteria are binding: Read them carefully when provided. "X by date Y" is not the same as "X ever". Predict whether THIS specific resolution criteria will be met — not whether the event is likely in general.
+4. Confidence mapping:
+   - "high": Clear, specific reason to deviate significantly from the market price. Strong evidence, relevant base rates, or a direct information source confirms the deviation.
+   - "medium": Some evidence or a relevant base rate, but uncertainty remains. Moderate deviation acceptable.
+   - "low": Limited information or high uncertainty. Stay near the market price. A "low" confidence answer should have yes_probability within ~5 percentage points of the market price.
+5. Elite wallet signals are weak supporting evidence. Even top traders are right ~60% of the time. Weight them as a minor tiebreaker, not a primary signal.
+6. Avoid anchoring to round numbers — your probability should reflect your actual belief, not be rounded to 0.50, 0.60, 0.70, etc.
+
+CATEGORY-SPECIFIC GUIDANCE:
+{_CATEGORY_GUIDANCE}
+
+REASONING QUALITY:
+Write one sentence identifying the single most important factor driving your probability estimate. Reference concrete evidence where possible.
+- Weak: "There is significant uncertainty around this outcome."
+- Strong: "FedWatch futures currently price a 71% cut probability, closely matching the market; no clear divergence."
+- Strong: "Bitcoin is 19% below the $100k target with 5 days remaining; historically this gap is rarely closed in the final week."
+"""
+
+# ── Tool definition (S1-2: structured output, no fragile JSON parsing) ────────
+_TOOL = {
+    "name": "submit_market_analysis",
+    "description": "Submit your probability estimates and reasoning for every market in this batch. Include exactly one entry per market.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "analyses": {
+                "type": "array",
+                "description": "One analysis object per market, in any order",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "market_id": {
+                            "type": "string",
+                            "description": "The market_id exactly as given in the input"
+                        },
+                        "yes_probability": {
+                            "type": "number",
+                            "description": "Your estimated probability of YES resolving (0.01 to 0.99)",
+                            "minimum": 0.01,
+                            "maximum": 0.99
+                        },
+                        "confidence": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"],
+                            "description": "Your confidence in this estimate"
+                        },
+                        "reasoning": {
+                            "type": "string",
+                            "description": "One clear sentence explaining the key factor driving your estimate"
+                        }
+                    },
+                    "required": ["market_id", "yes_probability", "confidence", "reasoning"]
+                }
+            }
+        },
+        "required": ["analyses"]
+    }
+}
 
 
 def _build_signal(market: dict, result: dict, wallet_signals: list[dict]) -> Optional[TradeSignal]:
@@ -108,11 +181,11 @@ def batch_analyse_markets(
     """
     Analyse multiple markets in a single Claude API call.
 
-    Sends all markets in one batched prompt and parses the JSON array
-    response — far cheaper than one call per market.
+    Uses a cached system prompt (S1-1) and structured tool output (S1-2).
+    Resolution criteria from Polymarket are injected per market (S1-3).
 
     Returns:
-        List of TradeSignal objects where should_trade = True
+        Tuple of (all_signals, tradeable_signals)
     """
     markets_to_check = [
         m for m in markets[:max_markets]
@@ -125,13 +198,10 @@ def batch_analyse_markets(
 
     logger.info(f"Analysing {len(markets_to_check)} markets with Claude...")
 
-    # Build the market list for the prompt — group by category for context injection
+    # Build per-market lines — dynamic content, NOT cached
     market_lines = []
-    category_contexts = {}   # category → context string (for deduplication)
-
     for i, m in enumerate(markets_to_check):
-        cat, ctx = get_category_context(m["question"])
-        category_contexts[cat] = ctx   # same category seen multiple times → overwrite is fine
+        cat, _ = get_category_context(m["question"])
 
         wallet_note = ""
         if wallet_signals:
@@ -143,62 +213,71 @@ def batch_analyse_markets(
                 ]
                 wallet_note = f" | Elite signals: {'; '.join(parts)}"
 
-        live_ctx = (enrichment or {}).get(m["market_id"], "")
-        live_note = f"\n   LIVE: {live_ctx}" if live_ctx else ""
+        # S1-3: resolution criteria from Polymarket API
+        resolution_note = ""
+        if m.get("resolution_criteria"):
+            resolution_note = f"\n   Resolution: {m['resolution_criteria'][:250]}"
+
+        live_note = ""
+        if (enrichment or {}).get(m["market_id"]):
+            live_note = f"\n   LIVE: {enrichment[m['market_id']]}"
+
+        # S1-5: price momentum (only show moves ≥2pp in 24h)
+        velocity_note = ""
+        v = m.get("price_velocity_24h")
+        if v is not None and abs(v) >= 0.02:
+            velocity_note = f" | 24h: {v:+.0%}"
 
         market_lines.append(
             f"{i+1}. [{m['market_id']}] [{cat}] {m['question']}\n"
-            f"   YES={m['yes']:.1%}  NO={1-m['yes']:.1%}{wallet_note}{live_note}"
+            f"   YES={m['yes']:.1%}  NO={1-m['yes']:.1%}{wallet_note}{velocity_note}{resolution_note}{live_note}"
         )
 
     markets_block = "\n".join(market_lines)
-
-    # Build category guidance block (only categories that appear in this batch)
-    category_block = "\n\n".join(
-        f"[{cat}]\n{ctx}" for cat, ctx in sorted(category_contexts.items())
+    user_message = (
+        f"Analyse these {len(markets_to_check)} prediction markets and call "
+        f"submit_market_analysis with your estimates:\n\n{markets_block}"
     )
-
-    prompt = f"""You are an expert prediction market analyst. Analyse each market below and estimate the true probability of YES.
-
-CATEGORY GUIDANCE (apply when relevant):
-{category_block}
-
-MARKETS:
-{markets_block}
-
-INSTRUCTIONS:
-- Each market is tagged with its category. Apply the relevant category guidance above.
-- Reason about the true probability using base rates, recent news, expert consensus, and resolution criteria.
-- Be calibrated — don't deviate from the market price without strong reason.
-- Elite wallet signals (if shown) are weak supporting evidence only.
-
-Respond ONLY with a JSON array — one object per market, in the same order. No markdown, no extra text:
-[
-  {{
-    "market_id": "<id>",
-    "yes_probability": 0.XX,
-    "confidence": "low" | "medium" | "high",
-    "reasoning": "One clear sentence"
-  }},
-  ...
-]"""
 
     try:
         response = client.messages.create(
             model=CLAUDE_MODEL,
-            max_tokens=2000,
-            messages=[{"role": "user", "content": prompt}]
+            max_tokens=3000,
+            system=[{
+                "type": "text",
+                "text": _SYSTEM_PROMPT,
+                "cache_control": {"type": "ephemeral"},  # S1-1: cache static system prompt
+            }],
+            tools=[_TOOL],
+            tool_choice={"type": "tool", "name": "submit_market_analysis"},  # S1-2: force tool use
+            messages=[{"role": "user", "content": user_message}]
         )
 
-        raw_text = response.content[0].text.strip()
-        clean_json = raw_text.replace("```json", "").replace("```", "").strip()
-        results = json.loads(clean_json)
+        # S1-2: parse structured tool output — no JSON string parsing
+        tool_block = next(
+            (b for b in response.content if b.type == "tool_use"),
+            None
+        )
+        if not tool_block:
+            logger.error("Claude did not return a tool_use block")
+            return [], []
 
+        results = tool_block.input.get("analyses", [])
         if not isinstance(results, list):
-            logger.error("Claude returned non-list JSON")
-            return []
+            logger.error("Tool call 'analyses' field is not a list")
+            return [], []
 
-        # Index markets by ID for fast lookup
+        # Log cache efficiency so we can verify S1-1 is working
+        usage = response.usage
+        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        if cache_read or cache_create:
+            logger.info(
+                f"Tokens — input: {usage.input_tokens}, "
+                f"cache_read: {cache_read}, cache_create: {cache_create}, "
+                f"output: {usage.output_tokens}"
+            )
+
         market_by_id = {m["market_id"]: m for m in markets_to_check}
 
         all_signals = []
@@ -220,9 +299,6 @@ Respond ONLY with a JSON array — one object per market, in the same order. No 
         logger.info(f"Found {len(tradeable_signals)} tradeable signals")
         return all_signals, tradeable_signals
 
-    except json.JSONDecodeError as e:
-        logger.error(f"Claude returned invalid JSON: {e}\nRaw: {raw_text}")
-        return [], []
     except anthropic.APIStatusError as e:
         logger.error(
             f"Anthropic API HTTP {e.status_code} — type={e.type!r} message={e.message!r}"

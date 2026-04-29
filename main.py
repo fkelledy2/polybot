@@ -29,7 +29,8 @@ from execution.paper_trader import PaperTrader
 from risk.manager import RiskManager
 from signals.claude_signal import batch_analyse_markets
 from web.app import install_log_handler, run_server, shared_state, update_signals
-from backtest.tracker import init_tracker, log_signals, check_and_resolve_markets
+from backtest.tracker import (init_tracker, log_signals, check_and_resolve_markets,
+                               record_prices, get_price_velocities, prune_price_history)
 from execution.resolver import resolve_open_positions
 from data.enrichment import enrich_markets
 
@@ -132,6 +133,12 @@ def main():
         markets_parsed = [polymarket.parse_market_price(m) for m in markets_raw]
         markets_parsed = [m for m in markets_parsed if m]  # Remove empty
 
+        # Record prices and attach 24h velocity for momentum signal (S1-5)
+        record_prices(markets_parsed)
+        velocities = get_price_velocities([m["market_id"] for m in markets_parsed])
+        for m in markets_parsed:
+            m["price_velocity_24h"] = velocities.get(m["market_id"])
+
         # 3. Get fresh elite wallet signals
         wallet_signals = wallet_tracker.get_elite_signals()
 
@@ -166,6 +173,10 @@ def main():
             resolved = check_and_resolve_markets()
             if resolved:
                 logger.info(f"Forward tracker: scored {resolved} predictions")
+
+        # Weekly: prune price history older than 7 days
+        if scan_count % 1440 == 0:
+            prune_price_history(days=7)
 
         # 5. For each signal, check risk and place trade
         new_trades = 0

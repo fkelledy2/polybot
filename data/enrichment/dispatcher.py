@@ -13,7 +13,7 @@ import threading
 import requests
 
 from signals.categorizer import get_category_context
-from . import crypto, macro, news, sports
+from . import crypto, macro, metaculus, news, sports
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +105,12 @@ def enrich_markets(markets: list[dict]) -> dict[str, str]:
             odds_ctx = _safe(sports.get_context, question, session)
             if odds_ctx:
                 parts.append(odds_ctx)
+
+        # Metaculus expert consensus (best signal for non-market-driven categories)
+        if cat in ("POLITICS", "MACRO", "GEO", "TECH"):
+            meta_ctx = _safe(metaculus.get_context, question, session)
+            if meta_ctx:
+                parts.append(meta_ctx)
 
         result[market_id] = " | ".join(parts)
 
