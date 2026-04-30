@@ -972,11 +972,25 @@ function updateApiStatus(ok) {
 // ══════════════════════════════════════════════════════════════
 async function refreshSignals() {
   const el = document.getElementById('scanner-body');
+  console.log('[SIGNALS] Fetching signals from /api/signals...');
   try {
-    const signals = await fetch('/api/signals').then(r => r.json());
+    const response = await fetch('/api/signals');
+    console.log('[SIGNALS] Response received:', { status: response.status, ok: response.ok });
+
+    if (!response.ok) {
+      console.error('[SIGNALS] HTTP error:', response.status, response.statusText);
+      updateApiStatus(false);
+      el.innerHTML = `<div style="color:var(--red);padding:10px">HTTP ${response.status}: ${response.statusText}</div>`;
+      return;
+    }
+
+    const signals = await response.json();
+    console.log('[SIGNALS] Data received:', { count: signals.length, data: signals });
     updateApiStatus(true);
 
     const edges = signals.filter(s => s.should_trade).length;
+    console.log('[SIGNALS] Edges found:', edges);
+
     const badge = document.getElementById('scanner-badge');
     badge.textContent = edges + ' EDGE' + (edges !== 1 ? 'S' : '');
     badge.className   = 'panel-badge ' + (edges > 0 ? 'green' : '');
@@ -990,11 +1004,14 @@ async function refreshSignals() {
     resetScanBar();
 
     if (!signals.length) {
+      console.log('[SIGNALS] No signals returned, showing waiting message');
       el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for scan&hellip;</div>';
       return;
     }
 
-    el.innerHTML = signals.map(s => {
+    console.log('[SIGNALS] Rendering cards...');
+    el.innerHTML = signals.map((s, idx) => {
+      console.log(`[SIGNALS] Card ${idx}:`, { question: s.question, edge: s.edge, should_trade: s.should_trade });
       const absEdge   = Math.abs(s.edge);
       const edgeSign  = s.edge >= 0 ? '+' : '-';
       const edgeLabel = edgeSign + edgePct(s.edge) + ' EDGE';
@@ -1053,10 +1070,12 @@ async function refreshSignals() {
     }).join('');
 
   } catch(e) {
-    console.error('refreshSignals error:', e);
+    console.error('[SIGNALS] ERROR:', e.message, e.stack);
+    console.error('[SIGNALS] Full error object:', e);
     updateApiStatus(false);
     if (el) el.innerHTML = `<div style="color:var(--red);padding:10px">Error loading signals: ${e.message}</div>`;
   }
+  console.log('[SIGNALS] Refresh cycle complete');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1064,29 +1083,48 @@ async function refreshSignals() {
 // ══════════════════════════════════════════════════════════════
 async function refreshMarkets() {
   const el = document.getElementById('markets-body');
+  console.log('[MARKETS] Fetching markets from /api/markets...');
   try {
-    const markets = await fetch('/api/markets').then(r => r.json());
+    const response = await fetch('/api/markets');
+    console.log('[MARKETS] Response received:', { status: response.status, ok: response.ok });
+
+    if (!response.ok) {
+      console.error('[MARKETS] HTTP error:', response.status, response.statusText);
+      updateApiStatus(false);
+      el.innerHTML = `<div style="color:var(--red);padding:10px">HTTP ${response.status}: ${response.statusText}</div>`;
+      return;
+    }
+
+    const markets = await response.json();
+    console.log('[MARKETS] Data received:', { count: markets.length, firstMarket: markets[0] });
     updateApiStatus(true);
     document.getElementById('markets-badge').textContent = 'WATCHING ' + markets.length;
 
     if (!markets.length) {
+      console.log('[MARKETS] No markets returned, showing waiting message');
       el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for scan&hellip;</div>';
       return;
     }
 
-    el.innerHTML = markets.map(m => `
+    console.log('[MARKETS] Rendering market rows...');
+    el.innerHTML = markets.map((m, idx) => {
+      console.log(`[MARKETS] Row ${idx}:`, { question: m.question, yes: m.yes, no: m.no });
+      return `
       <div class="market-row">
         <span class="mkt-q" title="${esc(m.question)}">${esc(m.question)}</span>
         <span class="mkt-yes">${cents(m.yes)}</span>
         <span class="mkt-no">${cents(m.no)}</span>
         <span class="mkt-vol">${fmtVol(m.volume_usd || 0)}</span>
       </div>
-    `).join('');
+    `;
+    }).join('');
   } catch(e) {
-    console.error('refreshMarkets error:', e);
+    console.error('[MARKETS] ERROR:', e.message, e.stack);
+    console.error('[MARKETS] Full error object:', e);
     updateApiStatus(false);
     if (el) el.innerHTML = `<div style="color:var(--red);padding:10px">Error loading markets: ${e.message}</div>`;
   }
+  console.log('[MARKETS] Refresh cycle complete');
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1408,25 +1446,38 @@ function startSSE() {
 // ══════════════════════════════════════════════════════════════
 // BOOT SEQUENCE
 // ══════════════════════════════════════════════════════════════
+console.log('[BOOT] Initializing dashboard...');
 initChart();
+console.log('[BOOT] Timeline chart initialized');
 initPortfolioChart();
+console.log('[BOOT] Portfolio chart initialized');
 startSSE();
+console.log('[BOOT] SSE stream started');
 
 // Initial data load
+console.log('[BOOT] Starting initial data load...');
 refreshStats();
+console.log('[BOOT] Stats loaded');
 refreshSignals();
+console.log('[BOOT] Signals loaded');
 refreshMarkets();
+console.log('[BOOT] Markets loaded');
 refreshTrades();
+console.log('[BOOT] Trades loaded');
 refreshChart();
+console.log('[BOOT] Timeline chart data loaded');
 refreshPortfolioChart();
+console.log('[BOOT] Portfolio chart data loaded');
 
 // Polling intervals
+console.log('[BOOT] Setting up polling intervals...');
 setInterval(refreshStats,         5000);
 setInterval(refreshSignals,       SIGNAL_REFRESH_MS);
 setInterval(refreshMarkets,       8000);
 setInterval(refreshTrades,        10000);
 setInterval(refreshChart,         20000);
 setInterval(refreshPortfolioChart, 15000);
+console.log('[BOOT] Dashboard initialization complete!');
 
 // Update "N seconds ago" in last-scan without waiting for full stats refresh
 setInterval(() => {
