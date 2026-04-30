@@ -1024,7 +1024,10 @@ async function refreshSignals() {
       </div>`;
     }).join('');
 
-  } catch(e) { console.warn('signals', e); }
+  } catch(e) {
+    console.error('refreshSignals error:', e, {signalCount: signals?.length, firstSignal: signals?.[0]});
+    el.innerHTML = `<div style="color:var(--red);padding:10px">Error rendering signals: ${e.message}</div>`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1049,7 +1052,10 @@ async function refreshMarkets() {
         <span class="mkt-vol">${fmtVol(m.volume_usd || 0)}</span>
       </div>
     `).join('');
-  } catch(e) { console.warn('markets', e); }
+  } catch(e) {
+    console.error('refreshMarkets error:', e, {marketCount: markets?.length, firstMarket: markets?.[0]});
+    el.innerHTML = `<div style="color:var(--red);padding:10px">Error rendering markets: ${e.message}</div>`;
+  }
 }
 
 // ══════════════════════════════════════════════════════════════
