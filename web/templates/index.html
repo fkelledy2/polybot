@@ -1206,20 +1206,20 @@ function initPortfolioChart() {
           bodyColor: '#c0ffd0',
           padding: 10,
           callbacks: {
-            title: items => new Date(items[0].raw.t).toLocaleString(),
-            label: item => '$' + parseFloat(item.raw.b).toFixed(2),
+            title: items => new Date(items[0].raw.x).toLocaleString(),
+            label: item => '$' + parseFloat(item.raw.y).toFixed(2),
           },
         },
       },
       scales: {
         x: {
-          type: 'linear',
+          type: 'time',
+          time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
           grid: { color: '#0a1f10', lineWidth: 0.5 },
           ticks: {
             color: '#4a7a5a',
             font: { family: 'Courier New', size: 9 },
             maxTicksLimit: 6,
-            callback: v => new Date(v).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }),
           },
           border: { display: false },
         },
@@ -1285,11 +1285,10 @@ async function refreshPortfolioChart() {
 
     const chartData = data.map(d => {
       const timestamp = new Date(d.t).getTime();
-      console.log('[PORTFOLIO] Mapping:', { raw: d.t, timestamp, balance: d.b });
-      return { t: timestamp, b: d.b };
+      return { x: timestamp, y: d.b };
     });
 
-    console.log('[PORTFOLIO] Chart data prepared, points:', chartData.length);
+    console.log('[PORTFOLIO] Chart data prepared:', { points: chartData.length, firstX: chartData[0]?.x, firstDate: new Date(chartData[0]?.x).toISOString(), lastX: chartData[chartData.length-1]?.x, lastDate: new Date(chartData[chartData.length-1]?.x).toISOString() });
     portfolioChart.data.datasets[0].data = chartData;
 
     // Display current value and date in the panel title
