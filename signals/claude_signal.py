@@ -2,15 +2,15 @@
 # ─────────────────────────────────────────────────────────────
 # Brain of the bot: sends markets to Claude, returns trade signals.
 #
-# Sprint 1 upgrades:
-#   S1-1  Prompt caching   — static system prompt cached; ~80% input token reduction
-#   S1-2  Tool use         — structured output via tool definition; no JSON parsing
-#   S1-3  Resolution criteria — injected per-market from Polymarket API
+# Sprint 1: prompt caching, tool use, resolution criteria
+# Sprint 2: extended thinking confirmation (S2-2)
+# Sprint 3: calibration correction (S3-1), new market handling (S3-2)
+# Sprint 4: batch API re-analysis (S4-4)
 # ─────────────────────────────────────────────────────────────
 
 import logging
 import anthropic
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 from config import ANTHROPIC_API_KEY, MIN_EDGE_TO_TRADE, CLAUDE_MODEL
 from signals.categorizer import get_category_context, CATEGORY_CONTEXT
@@ -19,42 +19,41 @@ logger = logging.getLogger(__name__)
 
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
+_CONFIRMATION_MODEL = "claude-sonnet-4-6"
+
+# ── S4-4: active batch state ──────────────────────────────────
+_active_batch_id: str | None = None
+
 
 @dataclass
 class TradeSignal:
-    """
-    The output of Claude's analysis for a single market.
-
-    If edge > MIN_EDGE_TO_TRADE, we consider placing a trade.
-    """
     market_id: str
     question: str
-    market_yes_price: float         # What the market says (0 to 1)
-    claude_yes_probability: float   # What Claude thinks (0 to 1)
-    edge: float                     # claude_probability - market_price
-    direction: str                  # "YES" or "NO"
-    confidence: str                 # "low", "medium", "high"
-    reasoning: str                  # Claude's explanation
-    wallet_alignment: bool          # Do elite wallets agree?
-    should_trade: bool              # Final recommendation
+    market_yes_price: float
+    claude_yes_probability: float
+    edge: float
+    direction: str
+    confidence: str
+    reasoning: str
+    wallet_alignment: bool
+    should_trade: bool
+    confirmed_by_thinking: bool = field(default=False)  # S2-2
 
     def __repr__(self):
         arrow = "↑" if self.direction == "YES" else "↓"
+        confirmed = " ✓think" if self.confirmed_by_thinking else ""
         return (
             f"Signal({arrow}{self.direction} | "
             f"market={self.market_yes_price:.0%} | "
             f"claude={self.claude_yes_probability:.0%} | "
             f"edge={self.edge:+.0%} | "
-            f"trade={self.should_trade})\n"
+            f"trade={self.should_trade}{confirmed})\n"
             f"  Q: {self.question[:70]}...\n"
             f"  Reason: {self.reasoning[:100]}..."
         )
 
 
 # ── Static system prompt (S1-1: cached across calls) ─────────────────────────
-# All category contexts are embedded here so this block exceeds the cache
-# minimum token threshold. The user message carries only the dynamic market list.
-
 _CATEGORY_GUIDANCE = "\n\n".join(
     f"[{cat}]\n{ctx}" for cat, ctx in sorted(CATEGORY_CONTEXT.items())
 )
@@ -74,6 +73,7 @@ CORE PRINCIPLES:
    - "low": Limited information or high uncertainty. Stay near the market price. A "low" confidence answer should have yes_probability within ~5 percentage points of the market price.
 5. Elite wallet signals are weak supporting evidence. Even top traders are right ~60% of the time. Weight them as a minor tiebreaker, not a primary signal.
 6. Avoid anchoring to round numbers — your probability should reflect your actual belief, not be rounded to 0.50, 0.60, 0.70, etc.
+7. [NEW] markets (listed <48h) may have less-efficient pricing at formation — apply slightly more scrutiny to find edge.
 
 CATEGORY-SPECIFIC GUIDANCE:
 {_CATEGORY_GUIDANCE}
@@ -85,7 +85,6 @@ Write one sentence identifying the single most important factor driving your pro
 - Strong: "Bitcoin is 19% below the $100k target with 5 days remaining; historically this gap is rarely closed in the final week."
 """
 
-# ── Tool definition (S1-2: structured output, no fragile JSON parsing) ────────
 _TOOL = {
     "name": "submit_market_analysis",
     "description": "Submit your probability estimates and reasoning for every market in this batch. Include exactly one entry per market.",
@@ -98,25 +97,10 @@ _TOOL = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "market_id": {
-                            "type": "string",
-                            "description": "The market_id exactly as given in the input"
-                        },
-                        "yes_probability": {
-                            "type": "number",
-                            "description": "Your estimated probability of YES resolving (0.01 to 0.99)",
-                            "minimum": 0.01,
-                            "maximum": 0.99
-                        },
-                        "confidence": {
-                            "type": "string",
-                            "enum": ["low", "medium", "high"],
-                            "description": "Your confidence in this estimate"
-                        },
-                        "reasoning": {
-                            "type": "string",
-                            "description": "One clear sentence explaining the key factor driving your estimate"
-                        }
+                        "market_id":       {"type": "string"},
+                        "yes_probability": {"type": "number", "minimum": 0.01, "maximum": 0.99},
+                        "confidence":      {"type": "string", "enum": ["low", "medium", "high"]},
+                        "reasoning":       {"type": "string"},
                     },
                     "required": ["market_id", "yes_probability", "confidence", "reasoning"]
                 }
@@ -127,31 +111,54 @@ _TOOL = {
 }
 
 
-def _build_signal(market: dict, result: dict, wallet_signals: list[dict]) -> Optional[TradeSignal]:
+def _get_calibration_correction(question: str, scan_count: int = 0) -> float:
+    """Import lazily to avoid circular imports at module load time."""
+    try:
+        from backtest.calibration import get_correction
+        return get_correction(question, scan_count)
+    except Exception:
+        return 0.0
+
+
+def _build_signal(market: dict, result: dict, wallet_signals: list[dict],
+                  scan_count: int = 0) -> Optional[TradeSignal]:
     """Convert a single Claude result dict into a TradeSignal."""
     try:
         market_id = market["market_id"]
         yes_price = market["yes"]
 
         claude_prob = float(result["yes_probability"])
-        confidence = result.get("confidence", "medium")
-        reasoning = result.get("reasoning", "No reasoning provided")
 
-        edge = claude_prob - yes_price
+        # S3-1: apply per-category calibration correction
+        correction = _get_calibration_correction(market.get("question", ""), scan_count)
+        if correction != 0.0:
+            corrected_prob = max(0.01, min(0.99, claude_prob - correction))
+            logger.debug(
+                f"Calibration: {claude_prob:.3f} → {corrected_prob:.3f} "
+                f"(correction={correction:+.3f})"
+            )
+            claude_prob = corrected_prob
+
+        confidence = result.get("confidence", "medium")
+        reasoning  = result.get("reasoning", "No reasoning provided")
+        edge       = claude_prob - yes_price
 
         if edge >= 0:
             direction = "YES"
-            abs_edge = edge
+            abs_edge  = edge
         else:
             direction = "NO"
-            abs_edge = abs(edge)
+            abs_edge  = abs(edge)
 
         wallet_alignment = False
         if wallet_signals:
             relevant = [s for s in wallet_signals if s.get("market_id") == market_id]
             wallet_alignment = any(s["outcome"] == direction for s in relevant)
 
-        should_trade = abs_edge >= MIN_EDGE_TO_TRADE and confidence != "low"
+        # S3-2: lower threshold for newly listed markets
+        effective_min = MIN_EDGE_TO_TRADE * 0.8 if market.get("is_new_market") else MIN_EDGE_TO_TRADE
+
+        should_trade = abs_edge >= effective_min and confidence != "low"
         if wallet_alignment and abs_edge >= MIN_EDGE_TO_TRADE * 0.8:
             should_trade = True
 
@@ -176,16 +183,12 @@ def batch_analyse_markets(
     markets: list[dict],
     wallet_signals: list[dict] = None,
     enrichment: dict[str, str] = None,
-    max_markets: int = 20
-) -> list[TradeSignal]:
+    max_markets: int = 20,
+    scan_count: int = 0,
+) -> tuple[list[TradeSignal], list[TradeSignal]]:
     """
     Analyse multiple markets in a single Claude API call.
-
-    Uses a cached system prompt (S1-1) and structured tool output (S1-2).
-    Resolution criteria from Polymarket are injected per market (S1-3).
-
-    Returns:
-        Tuple of (all_signals, tradeable_signals)
+    Returns (all_signals, tradeable_signals).
     """
     markets_to_check = [
         m for m in markets[:max_markets]
@@ -198,22 +201,23 @@ def batch_analyse_markets(
 
     logger.info(f"Analysing {len(markets_to_check)} markets with Claude...")
 
-    # Build per-market lines — dynamic content, NOT cached
     market_lines = []
     for i, m in enumerate(markets_to_check):
         cat, _ = get_category_context(m["question"])
+
+        new_tag = " [NEW]" if m.get("is_new_market") else ""
 
         wallet_note = ""
         if wallet_signals:
             relevant = [s for s in wallet_signals if s.get("market_id") == m["market_id"]]
             if relevant:
                 parts = [
-                    f"wallet {s['wallet'][:8]}... ({s['win_rate']:.0%} win rate) bets {s['outcome']} ${s['size_usd']:,.0f}"
+                    f"wallet {s['wallet'][:8]}... ({s['win_rate']:.0%} win rate) "
+                    f"bets {s['outcome']} ${s['size_usd']:,.0f}"
                     for s in relevant
                 ]
-                wallet_note = f" | Elite signals: {'; '.join(parts)}"
+                wallet_note = f" | Elite: {'; '.join(parts)}"
 
-        # S1-3: resolution criteria from Polymarket API
         resolution_note = ""
         if m.get("resolution_criteria"):
             resolution_note = f"\n   Resolution: {m['resolution_criteria'][:250]}"
@@ -222,15 +226,15 @@ def batch_analyse_markets(
         if (enrichment or {}).get(m["market_id"]):
             live_note = f"\n   LIVE: {enrichment[m['market_id']]}"
 
-        # S1-5: price momentum (only show moves ≥2pp in 24h)
         velocity_note = ""
         v = m.get("price_velocity_24h")
         if v is not None and abs(v) >= 0.02:
             velocity_note = f" | 24h: {v:+.0%}"
 
         market_lines.append(
-            f"{i+1}. [{m['market_id']}] [{cat}] {m['question']}\n"
-            f"   YES={m['yes']:.1%}  NO={1-m['yes']:.1%}{wallet_note}{velocity_note}{resolution_note}{live_note}"
+            f"{i+1}. [{m['market_id']}] [{cat}]{new_tag} {m['question']}\n"
+            f"   YES={m['yes']:.1%}  NO={1-m['yes']:.1%}"
+            f"{wallet_note}{velocity_note}{resolution_note}{live_note}"
         )
 
     markets_block = "\n".join(market_lines)
@@ -246,14 +250,13 @@ def batch_analyse_markets(
             system=[{
                 "type": "text",
                 "text": _SYSTEM_PROMPT,
-                "cache_control": {"type": "ephemeral"},  # S1-1: cache static system prompt
+                "cache_control": {"type": "ephemeral"},
             }],
             tools=[_TOOL],
-            tool_choice={"type": "tool", "name": "submit_market_analysis"},  # S1-2: force tool use
+            tool_choice={"type": "tool", "name": "submit_market_analysis"},
             messages=[{"role": "user", "content": user_message}]
         )
 
-        # S1-2: parse structured tool output — no JSON string parsing
         tool_block = next(
             (b for b in response.content if b.type == "tool_use"),
             None
@@ -267,9 +270,8 @@ def batch_analyse_markets(
             logger.error("Tool call 'analyses' field is not a list")
             return [], []
 
-        # Log cache efficiency so we can verify S1-1 is working
         usage = response.usage
-        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        cache_read   = getattr(usage, "cache_read_input_tokens", 0) or 0
         cache_create = getattr(usage, "cache_creation_input_tokens", 0) or 0
         if cache_read or cache_create:
             logger.info(
@@ -283,13 +285,13 @@ def batch_analyse_markets(
         all_signals = []
         tradeable_signals = []
         for result in results:
-            mid = result.get("market_id")
+            mid    = result.get("market_id")
             market = market_by_id.get(mid)
             if not market:
                 logger.warning(f"Claude returned unknown market_id: {mid}")
                 continue
 
-            signal = _build_signal(market, result, wallet_signals)
+            signal = _build_signal(market, result, wallet_signals, scan_count)
             if signal:
                 logger.info(f"Signal: {signal}")
                 all_signals.append(signal)
@@ -315,3 +317,186 @@ def batch_analyse_markets(
     except Exception as e:
         logger.error(f"Unexpected error in batch_analyse_markets: {e}")
         return [], []
+
+
+def confirm_high_edge_signals(
+    signals: list[TradeSignal],
+    markets: list[dict],
+    enrichment: dict[str, str] = None,
+    max_confirmations: int = 3,
+) -> list[TradeSignal]:
+    """
+    S2-2: Re-analyse high-edge signals with adaptive thinking on Sonnet.
+    Updates confidence/reasoning in place for signals where abs(edge) > 0.20.
+    Capped at max_confirmations per scan to control cost.
+    """
+    candidates = [
+        s for s in signals
+        if abs(s.edge) > 0.20 and s.confidence != "low"
+    ][:max_confirmations]
+
+    if not candidates:
+        return signals
+
+    market_by_id = {m["market_id"]: m for m in markets}
+    logger.info(f"Confirming {len(candidates)} high-edge signal(s) with extended thinking...")
+
+    for signal in candidates:
+        market = market_by_id.get(signal.market_id)
+        if not market:
+            continue
+
+        live_ctx = (enrichment or {}).get(signal.market_id, "")
+        resolution = market.get("resolution_criteria", "")[:200]
+
+        content = (
+            f"Re-analyse this single high-edge prediction market with careful reasoning:\n\n"
+            f"Market: {signal.question}\n"
+            f"Current YES price: {signal.market_yes_price:.1%}\n"
+            f"Your initial estimate: {signal.claude_yes_probability:.1%} "
+            f"(edge={signal.edge:+.1%}, confidence={signal.confidence})\n"
+            f"Initial reasoning: {signal.reasoning}\n"
+        )
+        if resolution:
+            content += f"Resolution criteria: {resolution}\n"
+        if live_ctx:
+            content += f"Live context: {live_ctx}\n"
+        content += "\nCall submit_market_analysis with your updated assessment."
+
+        try:
+            resp = client.messages.create(
+                model=_CONFIRMATION_MODEL,
+                max_tokens=8000,
+                thinking={"type": "adaptive"},
+                system=[{
+                    "type": "text",
+                    "text": _SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }],
+                tools=[_TOOL],
+                tool_choice={"type": "tool", "name": "submit_market_analysis"},
+                messages=[{"role": "user", "content": content}]
+            )
+
+            tool_block = next(
+                (b for b in resp.content if b.type == "tool_use"),
+                None
+            )
+            if not tool_block:
+                continue
+
+            analyses = tool_block.input.get("analyses", [])
+            if not analyses:
+                continue
+
+            result = analyses[0]
+            new_prob  = float(result.get("yes_probability", signal.claude_yes_probability))
+            new_conf  = result.get("confidence", signal.confidence)
+            new_reason = result.get("reasoning", signal.reasoning)
+
+            if new_conf != signal.confidence or abs(new_prob - signal.claude_yes_probability) > 0.03:
+                logger.info(
+                    f"Thinking confirmation [{signal.market_id[:8]}]: "
+                    f"{signal.claude_yes_probability:.0%}→{new_prob:.0%} "
+                    f"conf={signal.confidence}→{new_conf}"
+                )
+                signal.claude_yes_probability = new_prob
+                signal.confidence = new_conf
+                signal.reasoning  = new_reason
+                new_edge = new_prob - signal.market_yes_price
+                signal.edge = new_edge
+                signal.direction = "YES" if new_edge >= 0 else "NO"
+
+            signal.confirmed_by_thinking = True
+
+        except anthropic.APIError as e:
+            logger.warning(f"Thinking confirmation failed for {signal.market_id[:8]}: {e}")
+
+    return signals
+
+
+# ── S4-4: Batch API re-analysis ───────────────────────────────
+
+def batch_reanalyse_open_positions(
+    open_trades: dict,
+    markets_parsed: list[dict],
+) -> str | None:
+    """
+    Create an Anthropic Messages Batch to re-analyse all open positions.
+    Non-blocking — returns batch_id. Call poll_batch_results() later.
+    """
+    global _active_batch_id
+
+    if not open_trades:
+        return None
+
+    market_by_id = {m["market_id"]: m for m in markets_parsed}
+    requests_list = []
+
+    for market_id, trade in open_trades.items():
+        market = market_by_id.get(market_id)
+        current_yes = market.get("yes") if market else None
+        price_str = f"Current YES price: {current_yes:.1%}" if current_yes else "Current price unknown"
+
+        content = (
+            f"Re-analyse this open position:\n\n"
+            f"Question: {trade.question}\n"
+            f"Direction: {trade.direction} @ entry {trade.entry_price:.1%}\n"
+            f"{price_str}\n"
+            f"Call submit_market_analysis with updated assessment."
+        )
+        requests_list.append({
+            "custom_id": market_id,
+            "params": {
+                "model": CLAUDE_MODEL,
+                "max_tokens": 1000,
+                "system": [{"type": "text", "text": _SYSTEM_PROMPT,
+                             "cache_control": {"type": "ephemeral"}}],
+                "tools": [_TOOL],
+                "tool_choice": {"type": "tool", "name": "submit_market_analysis"},
+                "messages": [{"role": "user", "content": content}],
+            }
+        })
+
+    if not requests_list:
+        return None
+
+    try:
+        batch = client.messages.batches.create(requests=requests_list)
+        _active_batch_id = batch.id
+        logger.info(f"Batch reanalysis created: {batch.id} ({len(requests_list)} positions)")
+        return batch.id
+    except Exception as e:
+        logger.warning(f"Batch API creation failed: {e}")
+        return None
+
+
+def poll_batch_results(batch_id: str) -> dict | None:
+    """
+    Poll for batch results. Returns {market_id: result_dict} if complete, else None.
+    """
+    try:
+        batch = client.messages.batches.retrieve(batch_id)
+        if batch.processing_status != "ended":
+            return None
+
+        results = {}
+        for item in client.messages.batches.results(batch_id):
+            if item.result.type != "succeeded":
+                continue
+            tool_block = next(
+                (b for b in item.result.message.content if b.type == "tool_use"),
+                None
+            )
+            if not tool_block:
+                continue
+            analyses = tool_block.input.get("analyses", [])
+            if analyses:
+                results[item.custom_id] = analyses[0]
+
+        logger.info(f"Batch {batch_id[:12]}… complete: {len(results)} results")
+        return results
+
+    except Exception as e:
+        logger.debug(f"Batch poll failed: {e}")
+        return None

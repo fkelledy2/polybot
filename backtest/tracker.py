@@ -4,20 +4,19 @@
 # Every live scan, all Claude signals are logged with their
 # prices. When a market resolves, the outcome is recorded
 # and accuracy is calculated automatically.
-#
-# This builds a growing ground-truth dataset from live trading.
 # ─────────────────────────────────────────────────────────────
 
 import logging
-import sqlite3
 from datetime import datetime, timedelta
 from typing import Optional
 
-from config import TRADES_DB
+import db
 
 logger = logging.getLogger(__name__)
 
-SCHEMA = """
+_ph = db.placeholder
+
+SCHEMA = db.adapt_schema("""
 CREATE TABLE IF NOT EXISTS price_history (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     market_id   TEXT NOT NULL,
@@ -44,17 +43,18 @@ CREATE TABLE IF NOT EXISTS predictions (
     resolved_at           TEXT    DEFAULT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pred_market ON predictions (market_id);
-CREATE INDEX IF NOT EXISTS idx_pred_resolved ON predictions (resolved_yes);
-"""
+CREATE INDEX IF NOT EXISTS idx_pred_resolved ON predictions (resolved_yes)
+""")
 
 
 def init_tracker() -> None:
-    """Create the predictions table if it doesn't exist."""
-    conn = sqlite3.connect(TRADES_DB)
+    """Create tables if they don't exist."""
+    conn = db.get_connection()
+    c = db.get_cursor(conn)
     for stmt in SCHEMA.strip().split(";"):
         stmt = stmt.strip()
         if stmt:
-            conn.execute(stmt)
+            c.execute(stmt)
     conn.commit()
     conn.close()
     logger.debug("Prediction tracker initialised")
@@ -72,9 +72,10 @@ def record_prices(markets: list[dict]) -> None:
     ]
     if not rows:
         return
-    conn = sqlite3.connect(TRADES_DB)
-    conn.executemany(
-        "INSERT INTO price_history (market_id, yes_price, recorded_at) VALUES (?, ?, ?)",
+    conn = db.get_connection()
+    c = db.get_cursor(conn)
+    c.executemany(
+        f"INSERT INTO price_history (market_id, yes_price, recorded_at) VALUES ({_ph}, {_ph}, {_ph})",
         rows,
     )
     conn.commit()
@@ -82,10 +83,7 @@ def record_prices(markets: list[dict]) -> None:
 
 
 def get_price_velocities(market_ids: list[str]) -> dict[str, float]:
-    """
-    Return 24h price change (current - 24h_ago) for each market as a decimal.
-    Only markets with data in both windows are included.
-    """
+    """Return 24h price change (current - 24h_ago) for each market."""
     if not market_ids:
         return {}
 
@@ -93,23 +91,23 @@ def get_price_velocities(market_ids: list[str]) -> dict[str, float]:
     cutoff_low  = (now - timedelta(hours=26)).isoformat()
     cutoff_high = (now - timedelta(hours=22)).isoformat()
 
-    conn = sqlite3.connect(TRADES_DB)
-    c = conn.cursor()
+    conn = db.get_connection()
+    c = db.get_cursor(conn)
     result = {}
 
     for mid in market_ids:
         c.execute(
-            "SELECT yes_price FROM price_history WHERE market_id = ? ORDER BY recorded_at DESC LIMIT 1",
+            f"SELECT yes_price FROM price_history WHERE market_id = {_ph} ORDER BY recorded_at DESC LIMIT 1",
             (mid,),
         )
         row = c.fetchone()
         if not row:
             continue
-        current_price = row[0]
+        current_price = row["yes_price"]
 
         c.execute(
-            """SELECT yes_price FROM price_history
-               WHERE market_id = ? AND recorded_at BETWEEN ? AND ?
+            f"""SELECT yes_price FROM price_history
+               WHERE market_id = {_ph} AND recorded_at BETWEEN {_ph} AND {_ph}
                ORDER BY recorded_at ASC LIMIT 1""",
             (mid, cutoff_low, cutoff_high),
         )
@@ -117,57 +115,48 @@ def get_price_velocities(market_ids: list[str]) -> dict[str, float]:
         if not row:
             continue
 
-        result[mid] = round(current_price - row[0], 4)
+        result[mid] = round(current_price - row["yes_price"], 4)
 
     conn.close()
     return result
 
 
 def prune_price_history(days: int = 7) -> None:
-    """Remove price history older than `days` days to keep the DB small."""
+    """Remove price history older than `days` days."""
     cutoff = (datetime.now() - timedelta(days=days)).isoformat()
-    conn = sqlite3.connect(TRADES_DB)
-    conn.execute("DELETE FROM price_history WHERE recorded_at < ?", (cutoff,))
+    conn = db.get_connection()
+    c = db.get_cursor(conn)
+    c.execute(f"DELETE FROM price_history WHERE recorded_at < {_ph}", (cutoff,))
     conn.commit()
     conn.close()
 
 
 def log_signals(signals: list) -> None:
-    """
-    Save all Claude signals from a scan to the predictions table.
-    Skips markets we've already predicted (deduplicates by market_id).
-    """
+    """Save all Claude signals from a scan. Deduplicates by market_id."""
     if not signals:
         return
 
-    conn = sqlite3.connect(TRADES_DB)
-    c = conn.cursor()
+    conn = db.get_connection()
+    c = db.get_cursor(conn)
     ts = datetime.now().isoformat()
     saved = 0
 
     for s in signals:
-        # Only keep the first prediction per market
-        c.execute("SELECT id FROM predictions WHERE market_id = ?", (s.market_id,))
+        c.execute(f"SELECT id FROM predictions WHERE market_id = {_ph}", (s.market_id,))
         if c.fetchone():
             continue
 
-        c.execute("""
+        c.execute(f"""
             INSERT INTO predictions
             (market_id, question, scan_timestamp, market_yes_price,
              claude_yes_prob, edge, direction, confidence,
              should_trade, wallet_alignment)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES ({_ph}, {_ph}, {_ph}, {_ph}, {_ph}, {_ph}, {_ph}, {_ph}, {_ph}, {_ph})
         """, (
-            s.market_id,
-            s.question,
-            ts,
-            s.market_yes_price,
-            s.claude_yes_probability,
-            s.edge,
-            s.direction,
-            s.confidence,
-            int(s.should_trade),
-            int(s.wallet_alignment),
+            s.market_id, s.question, ts,
+            s.market_yes_price, s.claude_yes_probability,
+            s.edge, s.direction, s.confidence,
+            int(s.should_trade), int(s.wallet_alignment),
         ))
         saved += 1
 
@@ -178,22 +167,24 @@ def log_signals(signals: list) -> None:
 
 
 def resolve_market(market_id: str, resolved_yes: bool) -> int:
-    """
-    Record the outcome for a market and calculate simulated PnL.
-    Returns number of predictions updated.
-    """
-    conn = sqlite3.connect(TRADES_DB)
-    c = conn.cursor()
+    """Record the outcome for a market and calculate simulated PnL."""
+    conn = db.get_connection()
+    c = db.get_cursor(conn)
 
-    c.execute("""
+    c.execute(f"""
         SELECT id, direction, market_yes_price, should_trade
         FROM predictions
-        WHERE market_id = ? AND resolved_yes IS NULL
+        WHERE market_id = {_ph} AND resolved_yes IS NULL
     """, (market_id,))
     rows = c.fetchall()
 
     updated = 0
-    for row_id, direction, entry_price, should_trade in rows:
+    for row in rows:
+        row_id      = row["id"]
+        direction   = row["direction"]
+        entry_price = row["market_yes_price"]
+        should_trade = row["should_trade"]
+
         correct = (direction == "YES" and resolved_yes) or \
                   (direction == "NO"  and not resolved_yes)
 
@@ -205,10 +196,11 @@ def resolve_market(market_id: str, resolved_yes: bool) -> int:
                 no_price = 1.0 - entry_price
                 pnl = (1.0 - no_price) if not resolved_yes else -no_price
 
-        c.execute("""
+        c.execute(f"""
             UPDATE predictions
-            SET resolved_yes = ?, outcome_correct = ?, pnl_simulated = ?, resolved_at = ?
-            WHERE id = ?
+            SET resolved_yes = {_ph}, outcome_correct = {_ph},
+                pnl_simulated = {_ph}, resolved_at = {_ph}
+            WHERE id = {_ph}
         """, (int(resolved_yes), int(correct), pnl, datetime.now().isoformat(), row_id))
         updated += 1
 
@@ -218,26 +210,24 @@ def resolve_market(market_id: str, resolved_yes: bool) -> int:
 
 
 def check_and_resolve_markets() -> int:
-    """
-    Check Polymarket for any predicted markets that have now resolved.
-    Call this periodically (e.g., every 10 scans) to auto-score predictions.
-    """
-    import requests
+    """Check Polymarket for any predicted markets that have resolved."""
+    import requests as req
+    import json as _json
 
-    conn = sqlite3.connect(TRADES_DB)
-    c = conn.cursor()
-    c.execute("""
+    conn = db.get_connection()
+    c = db.get_cursor(conn)
+    c.execute(f"""
         SELECT DISTINCT market_id FROM predictions
         WHERE resolved_yes IS NULL
         LIMIT 50
     """)
-    unresolved_ids = [row[0] for row in c.fetchall()]
+    unresolved_ids = [row["market_id"] for row in c.fetchall()]
     conn.close()
 
     if not unresolved_ids:
         return 0
 
-    session = requests.Session()
+    session = req.Session()
     resolved_count = 0
 
     for market_id in unresolved_ids:
@@ -253,7 +243,6 @@ def check_and_resolve_markets() -> int:
             if not data.get("resolved"):
                 continue
 
-            import json as _json
             prices_raw = data.get("outcomePrices", '["0.5","0.5"]')
             if isinstance(prices_raw, str):
                 prices = _json.loads(prices_raw)
@@ -262,7 +251,7 @@ def check_and_resolve_markets() -> int:
 
             yes_final = float(prices[0])
             if abs(yes_final - 0.5) < 0.3:
-                continue  # Not clearly resolved yet
+                continue
 
             resolved_yes = yes_final > 0.5
             n = resolve_market(market_id, resolved_yes)
@@ -282,64 +271,60 @@ def check_and_resolve_markets() -> int:
 
 def get_tracker_stats() -> dict:
     """Return summary stats from the predictions table."""
-    conn = sqlite3.connect(TRADES_DB)
-    c = conn.cursor()
+    conn = db.get_connection()
+    c = db.get_cursor(conn)
 
-    c.execute("SELECT COUNT(*) FROM predictions")
-    total = c.fetchone()[0] or 0
+    c.execute("SELECT COUNT(*) AS n FROM predictions")
+    total = c.fetchone()["n"] or 0
 
-    c.execute("SELECT COUNT(*) FROM predictions WHERE resolved_yes IS NOT NULL")
-    resolved = c.fetchone()[0] or 0
+    c.execute("SELECT COUNT(*) AS n FROM predictions WHERE resolved_yes IS NOT NULL")
+    resolved = c.fetchone()["n"] or 0
 
     c.execute("""
-        SELECT COUNT(*), SUM(outcome_correct)
-        FROM predictions
-        WHERE resolved_yes IS NOT NULL
+        SELECT COUNT(*) AS n, SUM(outcome_correct) AS s
+        FROM predictions WHERE resolved_yes IS NOT NULL
     """)
     row = c.fetchone()
-    scored, correct_sum = (row[0] or 0), (row[1] or 0)
+    scored, correct_sum = (row["n"] or 0), (row["s"] or 0)
 
     c.execute("""
-        SELECT COUNT(*), SUM(outcome_correct)
-        FROM predictions
-        WHERE resolved_yes IS NOT NULL AND should_trade = 1
+        SELECT COUNT(*) AS n, SUM(outcome_correct) AS s
+        FROM predictions WHERE resolved_yes IS NOT NULL AND should_trade = 1
     """)
     row2 = c.fetchone()
-    traded_scored, traded_correct = (row2[0] or 0), (row2[1] or 0)
+    traded_scored, traded_correct = (row2["n"] or 0), (row2["s"] or 0)
 
     c.execute("""
-        SELECT COUNT(*), COALESCE(SUM(pnl_simulated), 0)
-        FROM predictions
-        WHERE resolved_yes IS NOT NULL AND should_trade = 1
+        SELECT COUNT(*) AS n, COALESCE(SUM(pnl_simulated), 0) AS total
+        FROM predictions WHERE resolved_yes IS NOT NULL AND should_trade = 1
     """)
     row3 = c.fetchone()
-    traded_total, total_pnl = (row3[0] or 0), float(row3[1] or 0)
+    traded_total, total_pnl = (row3["n"] or 0), float(row3["total"] or 0)
 
     conn.close()
 
     return {
-        "total_predictions":   total,
-        "resolved":            resolved,
+        "total_predictions":    total,
+        "resolved":             resolved,
         "directional_accuracy": round(correct_sum / scored, 4) if scored > 0 else None,
-        "traded_accuracy":     round(traded_correct / traded_scored, 4) if traded_scored > 0 else None,
-        "simulated_pnl":       round(total_pnl, 4),
-        "traded_resolved":     traded_total,
+        "traded_accuracy":      round(traded_correct / traded_scored, 4) if traded_scored > 0 else None,
+        "simulated_pnl":        round(total_pnl, 4),
+        "traded_resolved":      traded_total,
     }
 
 
 def get_recent_predictions(limit: int = 50) -> list[dict]:
     """Return recent predictions for display in the UI."""
-    conn = sqlite3.connect(TRADES_DB)
-    conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    c.execute("""
+    conn = db.get_connection()
+    c = db.get_cursor(conn)
+    c.execute(f"""
         SELECT id, market_id, question, scan_timestamp,
                market_yes_price, claude_yes_prob, edge,
                direction, confidence, should_trade,
                resolved_yes, outcome_correct, pnl_simulated
         FROM predictions
         ORDER BY id DESC
-        LIMIT ?
+        LIMIT {_ph}
     """, (limit,))
     rows = [dict(r) for r in c.fetchall()]
     conn.close()

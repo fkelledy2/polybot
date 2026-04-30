@@ -13,7 +13,7 @@ import threading
 import requests
 
 from signals.categorizer import get_category_context
-from . import crypto, macro, metaculus, news, sports
+from . import crypto, macro, metaculus, news, search, sports
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +111,11 @@ def enrich_markets(markets: list[dict]) -> dict[str, str]:
             meta_ctx = _safe(metaculus.get_context, question, session)
             if meta_ctx:
                 parts.append(meta_ctx)
+
+        # Web search headlines (universal signal)
+        search_ctx = _safe(search.get_context, question, session)
+        if search_ctx:
+            parts.append(search_ctx)
 
         result[market_id] = " | ".join(parts)
 

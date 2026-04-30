@@ -127,6 +127,29 @@ class PolymarketClient:
                 suffix = f" (Source: {resolution_source})"
                 resolution_criteria = (resolution_criteria + suffix).strip()
 
+            # Created-at for new-market detection (S3-2)
+            created_at_str = market.get("createdAt") or market.get("created_at")
+            created_at = None
+            if created_at_str:
+                try:
+                    created_at = datetime.fromisoformat(
+                        created_at_str.replace("Z", "+00:00")
+                    )
+                except Exception:
+                    pass
+            hours_old = None
+            if created_at:
+                hours_old = (datetime.now(tz=timezone.utc) - created_at).total_seconds() / 3600
+
+            # CLOB token ID for YES outcome (used by WebSocket feed)
+            clob_ids_raw = market.get("clobTokenIds", "[]")
+            clob_ids = []
+            try:
+                import json as _json
+                clob_ids = _json.loads(clob_ids_raw) if isinstance(clob_ids_raw, str) else clob_ids_raw
+            except Exception:
+                pass
+
             return {
                 "question":             market.get("question", "Unknown"),
                 "market_id":            market.get("id"),
@@ -136,10 +159,51 @@ class PolymarketClient:
                 "end_date":             end_date_str,
                 "days_to_resolve":      round(days_to_resolve, 1) if days_to_resolve is not None else None,
                 "resolution_criteria":  resolution_criteria,
+                "hours_old":            round(hours_old, 1) if hours_old is not None else None,
+                "clob_token_id_yes":    clob_ids[0] if clob_ids else None,
             }
         except (ValueError, IndexError, json.JSONDecodeError) as e:
             logger.warning(f"Could not parse prices for market: {e}")
             return {}
+
+    def get_new_markets(self, min_volume: float = 5000,
+                        max_age_hours: float = 48) -> list[dict]:
+        """Fetch recently listed markets (structural alpha at formation)."""
+        try:
+            response = self.session.get(
+                f"{self.base_url}/markets",
+                params={
+                    "active": True,
+                    "closed": False,
+                    "limit": 50,
+                    "order": "created_at",
+                    "ascending": False,
+                }
+            )
+            response.raise_for_status()
+            markets = response.json()
+        except requests.RequestException as e:
+            logger.error(f"Failed to fetch new markets: {e}")
+            return []
+
+        now = datetime.now(tz=timezone.utc)
+        result = []
+        for m in markets:
+            if float(m.get("volume", 0)) < min_volume:
+                continue
+            created_raw = m.get("createdAt") or m.get("created_at")
+            if not created_raw:
+                continue
+            try:
+                created = datetime.fromisoformat(created_raw.replace("Z", "+00:00"))
+                age_hours = (now - created).total_seconds() / 3600
+                if age_hours <= max_age_hours:
+                    result.append(m)
+            except Exception:
+                pass
+
+        logger.info(f"Found {len(result)} new markets (≤{max_age_hours}h old, >${min_volume:,.0f} vol)")
+        return result
 
     def get_high_volume_markets(
         self,

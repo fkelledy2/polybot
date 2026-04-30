@@ -91,3 +91,52 @@ def resolve_open_positions(paper_trader) -> int:
         logger.info(f"Resolver closed {closed} position(s). Balance: ${paper_trader.balance:,.2f}")
 
     return closed
+
+
+def check_stop_losses(paper_trader, markets: list[dict]) -> int:
+    """
+    Close open positions where the market has moved 2× entry_edge against us (S4-3).
+    Uses current market prices from the markets list.
+    """
+    if not paper_trader.open_positions or not markets:
+        return 0
+
+    price_map = {m["market_id"]: m.get("yes") for m in markets if m.get("market_id")}
+    closed = 0
+
+    for market_id, trade in list(paper_trader.open_positions.items()):
+        current_yes = price_map.get(market_id)
+        if current_yes is None:
+            continue
+
+        abs_edge = abs(trade.edge)
+        if abs_edge < 0.01:
+            continue   # No edge stored — skip stop-loss check
+
+        # How far has the price moved against our position?
+        if trade.direction == "YES":
+            adverse_move = trade.entry_price - current_yes   # positive = bad
+        else:
+            entry_no  = 1.0 - trade.entry_price
+            current_no = 1.0 - current_yes
+            adverse_move = entry_no - current_no             # positive = bad for NO
+
+        if adverse_move >= 2.0 * abs_edge:
+            exit_yes = current_yes
+            resolved_yes = trade.direction == "YES"  # treat as loss direction
+            # Close at current price, not binary resolution
+            result = paper_trader.close_trade(
+                market_id,
+                resolved_yes=resolved_yes,
+                exit_price=current_yes if trade.direction == "YES" else (1.0 - current_yes),
+            )
+            if result:
+                closed += 1
+                logger.warning(
+                    f"🛑 Stop-loss: closing {trade.direction} "
+                    f"'{trade.question[:40]}…' — "
+                    f"moved {adverse_move:+.0%} against position "
+                    f"(threshold: {2*abs_edge:.0%})"
+                )
+
+    return closed

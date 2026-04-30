@@ -7,14 +7,14 @@
 import json
 import logging
 import os
-import sqlite3
 import threading
 import time
 from collections import deque
 
 from flask import Flask, Response, jsonify, render_template
 
-from config import STARTING_BALANCE, TRADES_DB
+import db
+from config import STARTING_BALANCE
 
 app = Flask(__name__)
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
@@ -108,25 +108,23 @@ def _signal_to_dict(signal, markets: list) -> dict:
 
 # ── Database helpers ──────────────────────────────────────────
 
-def _db() -> sqlite3.Connection:
-    conn = sqlite3.connect(TRADES_DB, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+def _db():
+    return db.get_connection()
 
 
 def _get_stats() -> dict:
     try:
         conn = _db()
-        c = conn.cursor()
-        c.execute("SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades WHERE status='won'")
-        won_count, won_pnl = c.fetchone()
-        c.execute("SELECT COUNT(*), COALESCE(SUM(pnl),0) FROM trades WHERE status='lost'")
-        lost_count, lost_pnl = c.fetchone()
-        c.execute("SELECT COUNT(*), COALESCE(SUM(size_usd),0) FROM trades WHERE status='open'")
-        open_count, open_cost = c.fetchone()
+        c = db.get_cursor(conn)
+        c.execute("SELECT COUNT(*) AS n, COALESCE(SUM(pnl),0) AS s FROM trades WHERE status='won'")
+        r = c.fetchone(); won_count, won_pnl = r["n"], r["s"]
+        c.execute("SELECT COUNT(*) AS n, COALESCE(SUM(pnl),0) AS s FROM trades WHERE status='lost'")
+        r = c.fetchone(); lost_count, lost_pnl = r["n"], r["s"]
+        c.execute("SELECT COUNT(*) AS n, COALESCE(SUM(size_usd),0) AS s FROM trades WHERE status='open'")
+        r = c.fetchone(); open_count, open_cost = r["n"], r["s"]
         c.execute("SELECT balance FROM balance_log ORDER BY id DESC LIMIT 1")
         row = c.fetchone()
-        balance = row[0] if row else STARTING_BALANCE
+        balance = row["balance"] if row else STARTING_BALANCE
         conn.close()
     except Exception:
         won_count = won_pnl = lost_count = lost_pnl = open_count = open_cost = 0
@@ -189,7 +187,7 @@ def api_markets():
 def api_trades():
     try:
         conn = _db()
-        c = conn.cursor()
+        c = db.get_cursor(conn)
         c.execute("""
             SELECT id, market_id, question, direction,
                    entry_price, size_usd, shares,
@@ -207,7 +205,7 @@ def api_trades():
 def api_positions():
     try:
         conn = _db()
-        c = conn.cursor()
+        c = db.get_cursor(conn)
         c.execute("""
             SELECT id, market_id, question, direction,
                    entry_price, size_usd, shares, timestamp
@@ -225,9 +223,9 @@ def api_positions():
 def api_pnl_history():
     try:
         conn = _db()
-        c = conn.cursor()
+        c = db.get_cursor(conn)
         c.execute("SELECT timestamp, balance FROM balance_log ORDER BY id")
-        rows = [{"t": r[0], "b": round(r[1], 2)} for r in c.fetchall()]
+        rows = [{"t": r["timestamp"], "b": round(r["balance"], 2)} for r in c.fetchall()]
         conn.close()
     except Exception:
         rows = []
@@ -280,7 +278,7 @@ def api_backtest_latest():
     """Return the most recent historical backtest run."""
     try:
         conn = _db()
-        c = conn.cursor()
+        c = db.get_cursor(conn)
         c.execute("""
             SELECT id, run_at, markets_n, directional_accuracy,
                    best_threshold, best_ev, summary_json
@@ -291,7 +289,7 @@ def api_backtest_latest():
         if not row:
             return jsonify(None)
         d = dict(row)
-        d["summary"] = json.loads(d.pop("summary_json", "{}"))
+        d["summary"] = json.loads(d.pop("summary_json") or "{}")
         return jsonify(d)
     except Exception:
         return jsonify(None)

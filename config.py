@@ -62,3 +62,9 @@ POLYMARKET_CLOB_API = "https://clob.polymarket.com"
 # ── Logging ───────────────────────────────────────────────────
 LOG_FILE = "polybot.log"
 TRADES_DB = "trades.db"       # SQLite database for your trade history
+
+# ── External APIs (optional — features degrade gracefully if unset) ───────────
+BRAVE_SEARCH_API_KEY = os.getenv("BRAVE_SEARCH_API_KEY", "")   # S2-1 web search
+ODDS_API_KEY         = os.getenv("ODDS_API_KEY",         "")   # S2-4 sports lines
+DISCORD_WEBHOOK_URL  = os.getenv("DISCORD_WEBHOOK_URL",  "")   # S3-4 notifications
+DATABASE_URL         = os.getenv("DATABASE_URL",         "")   # S2-3 Heroku Postgres

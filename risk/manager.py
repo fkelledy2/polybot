@@ -1,8 +1,6 @@
 # risk/manager.py
 # ─────────────────────────────────────────────────────────────
-# The risk manager is the bot's safety layer.
-# Before any trade is placed, it checks whether we're still
-# within safe limits. It also monitors for daily loss limits.
+# Risk manager: circuit-breaker, cluster exposure limits (S4-2).
 # ─────────────────────────────────────────────────────────────
 
 import logging
@@ -11,84 +9,87 @@ from config import DAILY_LOSS_LIMIT, STARTING_BALANCE
 
 logger = logging.getLogger(__name__)
 
+MAX_CLUSTER_EXPOSURE = 0.15   # Max 15% of bankroll in one topic cluster
+
 
 class RiskManager:
-    """
-    Enforces trading risk limits.
-    
-    Think of this as the circuit breaker — it stops the bot
-    from blowing up the account on a bad day.
-    """
-
     def __init__(self, starting_balance: float = STARTING_BALANCE):
-        self.starting_balance = starting_balance
-        self.day_start_balance: float = starting_balance
-        self.current_day: date = date.today()
-        self.trades_today: int = 0
-        self.is_halted: bool = False
+        self.starting_balance    = starting_balance
+        self.day_start_balance   = starting_balance
+        self.current_day         = date.today()
+        self.trades_today        = 0
+        self.is_halted           = False
+        # Cluster assignments updated each scan: {market_id: cluster_id}
+        self.clusters: dict[str, int] = {}
+
+    def update_clusters(self, clusters: dict[str, int]) -> None:
+        self.clusters = clusters
 
     def _check_new_day(self, current_balance: float):
-        """Reset daily tracking if it's a new calendar day."""
         today = date.today()
         if today != self.current_day:
             logger.info(f"New day ({today}) — resetting daily risk counters")
-            self.current_day = today
+            self.current_day      = today
             self.day_start_balance = current_balance
-            self.trades_today = 0
-            self.is_halted = False  # Unhalt at start of new day
+            self.trades_today     = 0
+            self.is_halted        = False
 
     def check_daily_loss_limit(self, current_balance: float) -> bool:
-        """
-        Check if we've lost too much today.
-        
-        Returns True if we're safe to trade, False if halted.
-        """
         self._check_new_day(current_balance)
-
         daily_loss = (self.day_start_balance - current_balance) / self.day_start_balance
-        limit = DAILY_LOSS_LIMIT
-
-        if daily_loss >= limit:
+        if daily_loss >= DAILY_LOSS_LIMIT:
             if not self.is_halted:
                 logger.warning(
                     f"🛑 DAILY LOSS LIMIT HIT: Down {daily_loss:.1%} today "
-                    f"(limit: {limit:.1%}). Halting trading until tomorrow."
+                    f"(limit: {DAILY_LOSS_LIMIT:.1%}). Halting until tomorrow."
                 )
                 self.is_halted = True
             return False
-
         return True
 
-    def can_trade(self, current_balance: float, signal) -> tuple[bool, str]:
-        """
-        Main gate: should we allow this trade?
-        
-        Returns (True, "") if OK, or (False, reason_string) if blocked.
-        """
-        # 1. Daily halt?
+    def _cluster_exposure(self, open_positions: dict, cluster_id: int,
+                          portfolio_value: float) -> float:
+        """Return fraction of portfolio already committed to this cluster."""
+        if cluster_id < 0 or portfolio_value <= 0:
+            return 0.0
+        total = sum(
+            t.size_usd
+            for mid, t in open_positions.items()
+            if self.clusters.get(mid) == cluster_id
+        )
+        return total / portfolio_value
+
+    def can_trade(self, current_balance: float, signal,
+                  open_positions: dict = None, portfolio_value: float = None) -> tuple[bool, str]:
         if not self.check_daily_loss_limit(current_balance):
             return False, "Daily loss limit reached — halted until tomorrow"
 
-        # 2. Balance too low?
-        min_balance = self.starting_balance * 0.20   # Stop if down 80%
+        min_balance = self.starting_balance * 0.20
         if current_balance < min_balance:
-            return False, f"Balance too low (${current_balance:.2f}) — minimum is ${min_balance:.2f}"
+            return False, f"Balance too low (${current_balance:.2f})"
 
-        # 3. Confidence too low?
         if signal.confidence == "low":
             return False, "Signal confidence is 'low' — skipping"
 
-        # 4. Edge too small?
         abs_edge = abs(signal.edge)
-        if abs_edge < 0.08:     # Hard floor regardless of config
-            return False, f"Edge too small ({abs_edge:.1%}) — minimum 8%"
+        if abs_edge < 0.08:
+            return False, f"Edge too small ({abs_edge:.1%})"
 
-        # All checks passed
+        # Cluster exposure check (S4-2)
+        if open_positions and portfolio_value:
+            cluster_id = self.clusters.get(signal.market_id, -1)
+            if cluster_id >= 0:
+                exposure = self._cluster_exposure(open_positions, cluster_id, portfolio_value)
+                if exposure >= MAX_CLUSTER_EXPOSURE:
+                    return False, (
+                        f"Cluster {cluster_id} exposure {exposure:.1%} ≥ "
+                        f"{MAX_CLUSTER_EXPOSURE:.0%} limit"
+                    )
+
         self.trades_today += 1
         return True, ""
 
     def status_report(self, current_balance: float) -> str:
-        """Return a one-line risk status string."""
         self._check_new_day(current_balance)
         daily_pnl = current_balance - self.day_start_balance
         total_pnl_pct = (current_balance - self.starting_balance) / self.starting_balance
