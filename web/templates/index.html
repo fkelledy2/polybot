@@ -1213,13 +1213,16 @@ function initPortfolioChart() {
       },
       scales: {
         x: {
-          type: 'time',
-          time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+          type: 'linear',
           grid: { color: '#0a1f10', lineWidth: 0.5 },
           ticks: {
             color: '#4a7a5a',
             font: { family: 'Courier New', size: 9 },
             maxTicksLimit: 6,
+            callback: v => {
+              const date = new Date(v);
+              return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            },
           },
           border: { display: false },
         },
