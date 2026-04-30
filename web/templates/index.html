@@ -7,56 +7,39 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
-<!-- ══════════════ BACKTEST OVERLAY ══════════════════════════ -->
-<div id="bt-overlay">
-  <button class="bt-close" onclick="closeBacktest()">✕ CLOSE</button>
-  <div class="bt-title">POLYBOT<span>//</span>BACKTEST</div>
-
-  <div class="bt-tabs">
-    <div class="bt-tab active" onclick="switchBtTab('historical')">HISTORICAL ANALYSIS</div>
-    <div class="bt-tab" onclick="switchBtTab('tracker')">FORWARD TRACKER</div>
-  </div>
-
-  <!-- ── Historical tab ── -->
-  <div class="bt-panel active" id="bt-historical">
-    <div class="run-cmd">
-      Run a backtest from terminal:<br>
-      <code>python backtest/run.py</code> &nbsp;·&nbsp; <code>python backtest/run.py --markets 150</code><br>
-      Results are saved to the database and shown here automatically.
-    </div>
-    <div id="bt-hist-content">
-      <div style="color:var(--muted);padding:30px 0;">No backtest run yet. Run the command above to generate results.</div>
-    </div>
-  </div>
-
-  <!-- ── Forward tracker tab ── -->
-  <div class="bt-panel" id="bt-tracker">
-    <div id="bt-tracker-content">
-      <div style="color:var(--muted);padding:20px 0;">Loading…</div>
-    </div>
-  </div>
-</div>
   <style>
+    /* ══════════════════════════════════════════
+       DESIGN TOKENS
+       ══════════════════════════════════════════ */
     :root {
-      --green:   #00ff41;
-      --green-d: #00b32c;
-      --green-bg:#001a0a;
-      --amber:   #f0c040;
-      --red:     #ff3b3b;
-      --blue:    #3b9fff;
-      --muted:   #4a7a5a;
-      --border:  #0d3320;
-      --bg:      #000000;
-      --surface: #050f07;
-      --surface2:#081208;
+      --green:    #00ff41;
+      --green-d:  #00b32c;
+      --green-bg: #001a0a;
+      --amber:    #f0c040;
+      --red:      #ff3b3b;
+      --blue:     #3b9fff;
+      --muted:    #4a7a5a;
+      --muted2:   #2e5040;
+      --border:   #0d3320;
+      --bg:       #000000;
+      --surface:  #050f07;
+      --surface2: #081208;
+      /* Semantic aliases — makes intent clear */
+      --profit:   var(--green);
+      --loss:     var(--red);
+      --neutral:  var(--amber);
+      --live-glow: 0 0 6px rgba(0,255,65,0.5);
     }
+
     * { box-sizing: border-box; }
+
     html, body {
       background: var(--bg);
       color: var(--green);
       font-family: 'Courier New', Consolas, monospace;
       font-size: 12px;
-      margin: 0; padding: 0;
+      margin: 0;
+      padding: 0;
       height: 100%;
       overflow-x: hidden;
     }
@@ -66,50 +49,84 @@
     ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-    /* ── Header bar ── */
+    /* ══════════════════════════════════════════
+       HEADER
+       ══════════════════════════════════════════ */
     #header {
       display: flex;
       align-items: center;
-      gap: 0;
       background: var(--surface);
       border-bottom: 1px solid var(--border);
       padding: 0 12px;
-      height: 36px;
+      height: 38px;
       font-size: 11px;
       flex-shrink: 0;
       position: sticky;
       top: 0;
       z-index: 100;
+      gap: 0;
+      /* Prevent wrap-crush on narrower viewports */
+      overflow: hidden;
     }
+
     #header .logo {
       font-size: 14px;
       font-weight: bold;
       color: var(--green);
       letter-spacing: 1px;
-      margin-right: 24px;
+      margin-right: 16px;
       white-space: nowrap;
+      flex-shrink: 0;
     }
+    #header .logo .slash { color: var(--muted); }
+
+    /* Stats row — scrollable on small screens instead of wrapping */
+    #header-stats {
+      display: flex;
+      align-items: stretch;
+      flex: 1;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-width: none; /* Firefox */
+    }
+    #header-stats::-webkit-scrollbar { display: none; }
+
     .hstat {
       display: flex;
       flex-direction: column;
-      padding: 0 14px;
+      justify-content: center;
+      padding: 0 12px;
       border-left: 1px solid var(--border);
       line-height: 1.2;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .hstat-label { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .hstat-value { font-size: 13px; font-weight: bold; }
-    .hstat-value.pos { color: var(--green); }
-    .hstat-value.neg { color: var(--red); }
-    .hstat-value.neu { color: var(--amber); }
+    .hstat-label {
+      color: var(--muted);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .hstat-value {
+      font-size: 13px;
+      font-weight: bold;
+      transition: color 0.3s ease;
+    }
+    .hstat-value.pos { color: var(--profit); }
+    .hstat-value.neg { color: var(--loss); }
+    .hstat-value.neu { color: var(--neutral); }
 
-    .h-mode {
-      margin-left: auto;
+    /* Header right controls — always visible, never truncated */
+    .h-controls {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
+      flex-shrink: 0;
+      padding-left: 12px;
+      border-left: 1px solid var(--border);
       font-size: 10px;
-      color: var(--muted);
     }
+
     .mode-badge {
       background: var(--green-bg);
       border: 1px solid var(--green-d);
@@ -117,26 +134,58 @@
       padding: 2px 8px;
       font-size: 10px;
       letter-spacing: 1px;
+      white-space: nowrap;
     }
-    #clock { color: var(--muted); font-size: 11px; min-width: 60px; text-align: right; }
 
-    /* ── Layout grid ── */
+    #clock {
+      color: var(--muted);
+      font-size: 11px;
+      min-width: 58px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--muted);
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 10px;
+      padding: 2px 10px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-ghost:hover {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    /* ══════════════════════════════════════════
+       LAYOUT GRIDS
+       ══════════════════════════════════════════ */
     #main-grid {
       display: grid;
-      grid-template-columns: 380px 160px 1fr;
-      grid-template-rows: auto auto;
+      /* Scanner gets more space; wallet col is narrower; markets fills rest */
+      grid-template-columns: 400px 180px 1fr;
       gap: 1px;
       background: var(--border);
-      flex: 1;
+      flex-shrink: 0;
     }
+
     #bottom-grid {
       display: grid;
       grid-template-columns: 1fr 1fr 1fr;
       gap: 1px;
       background: var(--border);
+      flex: 1;
+      min-height: 0;
     }
 
-    /* ── Panel ── */
+    /* ══════════════════════════════════════════
+       PANELS
+       ══════════════════════════════════════════ */
     .panel {
       background: var(--surface);
       padding: 10px 12px;
@@ -144,6 +193,7 @@
       display: flex;
       flex-direction: column;
     }
+
     .panel-title {
       font-size: 10px;
       color: var(--muted);
@@ -152,13 +202,14 @@
       margin-bottom: 8px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       flex-shrink: 0;
     }
     .panel-title .slash { color: var(--green-d); }
+
     .panel-badge {
       margin-left: auto;
-      background: var(--amber);
+      background: var(--neutral);
       color: #000;
       font-size: 9px;
       padding: 1px 6px;
@@ -168,40 +219,146 @@
     .panel-badge.green { background: var(--green); }
     .panel-badge.red   { background: var(--red); color: #fff; }
 
-    /* ── Scanner cards ── */
+    /* ── Last-updated timestamp shown per panel ── */
+    .panel-updated {
+      font-size: 9px;
+      color: var(--muted2);
+      letter-spacing: 0;
+      /* Not uppercase — clearly secondary info */
+    }
+    .panel-updated.stale { color: var(--neutral); } /* > 30s ago */
+
+    /* ── Scan countdown bar ── */
+    .scan-progress-wrap {
+      height: 2px;
+      background: var(--border);
+      margin-bottom: 8px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .scan-progress-bar {
+      height: 100%;
+      background: var(--green-d);
+      transition: width 1s linear;
+      /* Width controlled by JS */
+    }
+
+    /* ══════════════════════════════════════════
+       SIGNAL CARDS
+       ══════════════════════════════════════════ */
     #scanner-body { overflow-y: auto; flex: 1; }
+
     .scan-card {
       border: 1px solid var(--border);
       padding: 8px 10px;
       margin-bottom: 6px;
       background: var(--surface2);
+      transition: border-color 0.15s;
     }
     .scan-card:hover { border-color: var(--green-d); }
-    .scan-q {
-      font-size: 11px;
-      color: #c0ffd0;
-      margin-bottom: 5px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+
+    /* Tradeable cards get a stronger left accent */
+    .scan-card.is-tradeable {
+      border-left: 3px solid var(--green);
     }
+
+    /* ── Card header row: direction + edge + confidence on one line ── */
+    .scan-card-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 5px;
+      flex-wrap: wrap;
+    }
+
+    /* Direction pill — first and most prominent element */
+    .dir-pill {
+      font-size: 11px;
+      font-weight: bold;
+      padding: 1px 8px;
+      letter-spacing: 0.5px;
+    }
+    .dir-pill.yes { background: rgba(0,255,65,0.15); color: var(--green); border: 1px solid var(--green); }
+    .dir-pill.no  { background: rgba(255,59,59,0.12); color: var(--red);   border: 1px solid var(--red); }
+
+    /* Edge badge */
     .scan-edge {
       display: inline-block;
       padding: 1px 7px;
       font-size: 10px;
       font-weight: bold;
-      margin-bottom: 5px;
     }
-    .scan-edge.pos { background: rgba(240,192,64,0.15); color: var(--amber); border: 1px solid var(--amber); }
-    .scan-edge.tradeable { background: rgba(0,255,65,0.12); color: var(--green); border: 1px solid var(--green); }
-    .scan-edge.neg { background: rgba(255,59,59,0.1); color: var(--muted); border: 1px solid var(--border); }
+    .scan-edge.pos       { background: rgba(240,192,64,0.15); color: var(--amber);  border: 1px solid var(--amber); }
+    .scan-edge.tradeable { background: rgba(0,255,65,0.12);   color: var(--green);  border: 1px solid var(--green); }
+    .scan-edge.neg       { background: transparent;            color: var(--muted);  border: 1px solid var(--border); }
+
+    /* Confidence dot + label */
+    .conf-badge {
+      font-size: 9px;
+      padding: 1px 5px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .conf-high   { border-color: var(--green-d); color: var(--green-d); }
+    .conf-medium { border-color: var(--amber);   color: var(--amber); }
+    .conf-low    { border-color: var(--muted);   color: var(--muted); }
+
+    /* Market question — allow two lines so it's actually readable */
+    .scan-q {
+      font-size: 11px;
+      color: #c0ffd0;
+      margin-bottom: 5px;
+      /* Two-line clamp instead of single line with hard truncation */
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      line-height: 1.4;
+    }
+
+    /* Price/volume meta row */
     .scan-meta {
       display: flex;
       gap: 14px;
       font-size: 10px;
       color: var(--muted);
+      flex-wrap: wrap;
     }
     .scan-meta span strong { color: #9fd0af; }
+
+    /* Mispricing visualiser — shows market price vs fair value */
+    .scan-mispricing {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 5px 0;
+      font-size: 9px;
+      color: var(--muted);
+    }
+    .misprice-bar-wrap {
+      flex: 1;
+      height: 4px;
+      background: var(--border);
+      position: relative;
+    }
+    /* Market price marker */
+    .misprice-mkt {
+      position: absolute;
+      top: -2px;
+      width: 2px;
+      height: 8px;
+      background: var(--muted);
+    }
+    /* Claude fair-value marker */
+    .misprice-fair {
+      position: absolute;
+      top: -2px;
+      width: 2px;
+      height: 8px;
+      background: var(--green);
+    }
+
+    /* Action row */
     .scan-actions { display: flex; gap: 6px; margin-top: 6px; }
     .scan-btn {
       font-family: inherit;
@@ -212,16 +369,15 @@
       letter-spacing: 0.5px;
       text-transform: uppercase;
     }
-    .btn-traded  { border-color: var(--green);  color: var(--green);  background: rgba(0,255,65,0.08); }
-    .btn-skipped { border-color: var(--border);  color: var(--muted);  background: transparent; }
-    .btn-low-conf{ border-color: var(--amber);   color: var(--amber);  background: rgba(240,192,64,0.08); }
-    .conf-badge  { font-size: 9px; padding: 1px 5px; border: 1px solid var(--border); color: var(--muted); }
-    .conf-high   { border-color: var(--green-d); color: var(--green-d); }
-    .conf-medium { border-color: var(--amber);   color: var(--amber); }
-    .conf-low    { border-color: var(--muted);   color: var(--muted); }
+    .btn-traded   { border-color: var(--green); color: var(--green);  background: rgba(0,255,65,0.08); }
+    .btn-skipped  { border-color: var(--border); color: var(--muted);  background: transparent; }
+    .btn-low-conf { border-color: var(--amber);  color: var(--amber);  background: rgba(240,192,64,0.08); }
 
-    /* ── Wallet tracker ── */
+    /* ══════════════════════════════════════════
+       WALLET TRACKER
+       ══════════════════════════════════════════ */
     #wallet-body { overflow-y: auto; flex: 1; }
+
     .wallet-row {
       padding: 5px 0;
       border-bottom: 1px solid var(--border);
@@ -230,15 +386,16 @@
       gap: 6px;
       font-size: 10px;
     }
-    .w-addr { color: #9fd0af; flex: 1; }
-    .w-tag  {
-      font-size: 8px; padding: 1px 4px; font-weight: bold; letter-spacing: 0.5px;
-    }
-    .tag-elite { background: rgba(0,255,65,0.1);  color: var(--green);  border: 1px solid var(--green-d); }
-    .tag-whale { background: rgba(59,159,255,0.1); color: var(--blue);   border: 1px solid var(--blue); }
+    .w-addr { color: #9fd0af; flex: 1; font-variant-numeric: tabular-nums; }
+    .w-tag  { font-size: 8px; padding: 1px 4px; font-weight: bold; letter-spacing: 0.5px; }
+    .tag-elite { background: rgba(0,255,65,0.1);  color: var(--green); border: 1px solid var(--green-d); }
+    .tag-whale { background: rgba(59,159,255,0.1); color: var(--blue);  border: 1px solid var(--blue); }
 
-    /* ── Live markets ── */
+    /* ══════════════════════════════════════════
+       LIVE MARKETS
+       ══════════════════════════════════════════ */
     #markets-body { overflow-y: auto; flex: 1; }
+
     .market-row {
       display: grid;
       grid-template-columns: 1fr 42px 42px 52px;
@@ -249,36 +406,48 @@
       font-size: 10px;
     }
     .market-row:hover { background: var(--surface2); }
-    .mkt-q  { color: #c0ffd0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .mkt-yes { color: var(--green); text-align: right; }
-    .mkt-no  { color: var(--red);   text-align: right; }
+    .mkt-q   { color: #c0ffd0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mkt-yes { color: var(--green); text-align: right; font-variant-numeric: tabular-nums; }
+    .mkt-no  { color: var(--red);   text-align: right; font-variant-numeric: tabular-nums; }
     .mkt-vol { color: var(--muted); text-align: right; font-size: 9px; }
     .mkt-header { color: var(--muted); font-size: 9px; letter-spacing: 0.5px; }
 
-    /* ── Trade feed ── */
+    /* ══════════════════════════════════════════
+       TRADE FEED
+       ══════════════════════════════════════════ */
     #trades-body { overflow-y: auto; flex: 1; }
+
     .trade-row {
       padding: 5px 0;
       border-bottom: 1px solid var(--border);
       font-size: 10px;
+      /* Added pnl column */
       display: grid;
-      grid-template-columns: 30px 1fr 50px 52px 50px;
+      grid-template-columns: 28px 1fr 36px 50px 48px 60px;
       gap: 4px;
       align-items: center;
     }
-    .t-id    { color: var(--muted); }
+    .t-id    { color: var(--muted); font-variant-numeric: tabular-nums; }
     .t-q     { color: #c0ffd0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .t-dir   { text-align: center; font-weight: bold; font-size: 9px; }
     .t-dir.yes { color: var(--green); }
     .t-dir.no  { color: var(--red); }
-    .t-size  { color: var(--muted); text-align: right; }
+    .t-size  { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
     .t-status { text-align: center; font-size: 9px; font-weight: bold; }
     .s-won   { color: var(--green); }
     .s-lost  { color: var(--red); }
     .s-open  { color: var(--amber); }
-    .t-pnl   { text-align: right; font-weight: bold; }
+    /* P&L column — this is the outcome, make it prominent */
+    .t-pnl   { text-align: right; font-weight: bold; font-size: 10px; font-variant-numeric: tabular-nums; }
 
-    /* ── Log terminal ── */
+    /* ══════════════════════════════════════════
+       TRADE TIMELINE CHART
+       ══════════════════════════════════════════ */
+    #timeline-chart-wrap { flex: 1; position: relative; min-height: 0; }
+
+    /* ══════════════════════════════════════════
+       ACTIVITY LOG
+       ══════════════════════════════════════════ */
     #log-terminal {
       overflow-y: auto;
       flex: 1;
@@ -286,31 +455,112 @@
       line-height: 1.45;
       color: var(--muted);
     }
-    .log-line { white-space: pre-wrap; word-break: break-all; }
+    .log-line     { white-space: pre-wrap; word-break: break-all; }
     .log-INFO     { color: #5ab87a; }
     .log-WARNING  { color: var(--amber); }
     .log-ERROR    { color: var(--red); }
     .log-CRITICAL { color: var(--red); font-weight: bold; }
     .log-DEBUG    { color: #2a4a35; }
 
-    /* ── Timeline chart ── */
-    #timeline-chart-wrap { flex: 1; position: relative; min-height: 0; }
+    /* ══════════════════════════════════════════
+       ANIMATIONS
+       ══════════════════════════════════════════ */
+    @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    @keyframes blink  { 0%,49%{opacity:1}  50%,100%{opacity:0} }
+    /* Smooth value-change flash — applied via JS */
+    @keyframes flashGreen { 0%{color:#fff} 100%{color:inherit} }
+    .flash { animation: flashGreen 0.4s ease-out; }
 
-    /* ── Open positions (in scanner col, bottom) ── */
-    #pos-body { overflow-y: auto; }
-    .pos-row {
-      border: 1px solid var(--border);
-      padding: 6px 8px;
-      margin-bottom: 5px;
-      background: var(--surface2);
-      font-size: 10px;
+    /* ══════════════════════════════════════════
+       BACKTEST OVERLAY
+       ══════════════════════════════════════════ */
+    #bt-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.96);
+      z-index: 1000;
+      overflow-y: auto;
+      padding: 20px 20px 40px;
+      font-family: 'Courier New', monospace;
+      color: var(--green);
     }
-    .pos-q   { color: #c0ffd0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
-    .pos-meta { color: var(--muted); display: flex; gap: 10px; }
-    .dir-yes { color: var(--green); font-weight: bold; }
-    .dir-no  { color: var(--red);   font-weight: bold; }
 
-    /* ── Responsive ── */
+    /* Close button is sticky within the scrollable overlay, not fixed to viewport */
+    .bt-close {
+      position: sticky;
+      top: 0;
+      float: right;
+      background: var(--bg);
+      border: 1px solid var(--muted);
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 3px 10px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      z-index: 10;
+    }
+    .bt-close:hover { border-color: var(--red); color: var(--red); }
+
+    .bt-title { font-size: 16px; font-weight: bold; letter-spacing: 2px; margin-bottom: 20px; clear: both; }
+    .bt-title span { color: var(--muted); }
+
+    .bt-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+    .bt-tab  {
+      padding: 6px 16px;
+      font-size: 10px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      color: var(--muted);
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s;
+    }
+    .bt-tab.active  { color: var(--green); border-bottom-color: var(--green); }
+    .bt-tab:hover   { color: var(--green); }
+
+    .bt-panel        { display: none; }
+    .bt-panel.active { display: block; }
+
+    .bt-stat-row  { display: flex; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; }
+    .bt-stat      { display: flex; flex-direction: column; }
+    .bt-stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .bt-stat-value { font-size: 22px; font-weight: bold; font-variant-numeric: tabular-nums; }
+
+    .bt-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 20px; }
+    .bt-table th {
+      color: var(--muted);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .bt-table td { padding: 4px 8px; border-bottom: 1px solid #0d1f0d; }
+    .bt-table tr:hover td { background: var(--surface2); }
+
+    .bt-section { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 8px; }
+    .star { color: var(--amber); font-size: 12px; }
+
+    .pred-correct { color: var(--green); }
+    .pred-wrong   { color: var(--red); }
+    .pred-pending { color: var(--muted); }
+
+    .run-cmd {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      font-size: 11px;
+      color: #9fd0af;
+      margin-bottom: 16px;
+      line-height: 1.8;
+    }
+    .run-cmd code { color: var(--amber); }
+
+    /* ══════════════════════════════════════════
+       RESPONSIVE
+       ══════════════════════════════════════════ */
     @media (max-width: 1100px) {
       #main-grid   { grid-template-columns: 1fr 1fr; }
       #bottom-grid { grid-template-columns: 1fr 1fr; }
@@ -318,69 +568,128 @@
     @media (max-width: 700px) {
       #main-grid   { grid-template-columns: 1fr; }
       #bottom-grid { grid-template-columns: 1fr; }
+      .trade-row   { grid-template-columns: 28px 1fr 36px 48px; }
+      /* Hide size and status columns on very narrow screens */
+      .t-size, .t-status { display: none; }
     }
   </style>
 </head>
+
+<!-- ══════════════ BACKTEST OVERLAY ══════════════════════════ -->
+<!-- Placed before body open so it sits above everything in the stacking context -->
+<div id="bt-overlay">
+  <button class="bt-close" onclick="closeBacktest()">&#10005; CLOSE</button>
+  <div class="bt-title">POLYBOT<span>//</span>BACKTEST</div>
+
+  <div class="bt-tabs">
+    <div class="bt-tab active" onclick="switchBtTab('historical')">HISTORICAL ANALYSIS</div>
+    <div class="bt-tab" onclick="switchBtTab('tracker')">FORWARD TRACKER</div>
+  </div>
+
+  <!-- Historical tab -->
+  <div class="bt-panel active" id="bt-historical">
+    <div class="run-cmd">
+      Run a backtest from terminal:<br>
+      <code>python backtest/run.py</code> &nbsp;&middot;&nbsp; <code>python backtest/run.py --markets 150</code><br>
+      Results are saved to the database and shown here automatically.
+    </div>
+    <div id="bt-hist-content">
+      <div style="color:var(--muted);padding:30px 0;">No backtest run yet. Run the command above to generate results.</div>
+    </div>
+  </div>
+
+  <!-- Forward tracker tab -->
+  <div class="bt-panel" id="bt-tracker">
+    <div id="bt-tracker-content">
+      <div style="color:var(--muted);padding:20px 0;">Loading&hellip;</div>
+    </div>
+  </div>
+</div>
+
 <body style="display:flex;flex-direction:column;height:100vh;">
 
 <!-- ══════════════════ HEADER ══════════════════════════════ -->
 <div id="header">
-  <div class="logo">POLYBOT<span style="color:var(--muted)">//</span>TERMINAL</div>
+  <div class="logo">POLYBOT<span class="slash">//</span>TERMINAL</div>
 
-  <div class="hstat">
-    <div class="hstat-label">NET PNL</div>
-    <div class="hstat-value" id="h-pnl">+$0.00</div>
-  </div>
-  <div class="hstat">
-    <div class="hstat-label">OPEN</div>
-    <div class="hstat-value neu" id="h-open">0</div>
-  </div>
-  <div class="hstat">
-    <div class="hstat-label">WIN%</div>
-    <div class="hstat-value" id="h-win">—</div>
-  </div>
-  <div class="hstat">
-    <div class="hstat-label">EDGES</div>
-    <div class="hstat-value" id="h-edges">0</div>
-  </div>
-  <div class="hstat">
-    <div class="hstat-label">WALLETS</div>
-    <div class="hstat-value" id="h-wallets">0</div>
-  </div>
-  <div class="hstat">
-    <div class="hstat-label">SCAN</div>
-    <div class="hstat-value" id="h-scan">—</div>
-  </div>
-  <div class="hstat">
-    <div class="hstat-label">BALANCE</div>
-    <div class="hstat-value" id="h-balance">$600</div>
+  <!-- Scrollable stats strip — never wraps, scrolls sideways on small screens -->
+  <div id="header-stats">
+    <div class="hstat">
+      <div class="hstat-label">NET P&amp;L</div>
+      <div class="hstat-value" id="h-pnl">—</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">PORTFOLIO</div>
+      <div class="hstat-value neu" id="h-portfolio">—</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">OPEN</div>
+      <div class="hstat-value neu" id="h-open">0</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">WIN%</div>
+      <div class="hstat-value" id="h-win">—</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">W / L</div>
+      <div class="hstat-value neu" id="h-wl">—</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">EDGES</div>
+      <div class="hstat-value" id="h-edges">0</div>
+    </div>
+    <div class="hstat">
+      <!-- "TRACKED" is more informative than "WALLETS" — makes 0 less ambiguous -->
+      <div class="hstat-label">WALLETS</div>
+      <div class="hstat-value" id="h-wallets">0</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">SCAN #</div>
+      <div class="hstat-value" id="h-scan">—</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-label">BALANCE</div>
+      <!-- No hardcoded $600 — show dash until first API response -->
+      <div class="hstat-value" id="h-balance">—</div>
+    </div>
+    <div class="hstat">
+      <!-- Last scan timestamp — critical for judging data freshness -->
+      <div class="hstat-label">LAST SCAN</div>
+      <div class="hstat-value" id="h-last-scan" style="font-size:11px;color:var(--muted)">—</div>
+    </div>
   </div>
 
-  <div class="h-mode">
-    <button onclick="openBacktest()" style="background:transparent;border:1px solid var(--muted);color:var(--muted);font-family:inherit;font-size:10px;padding:2px 10px;cursor:pointer;letter-spacing:0.5px;" onmouseover="this.style.borderColor='var(--green)';this.style.color='var(--green)'" onmouseout="this.style.borderColor='var(--muted)';this.style.color='var(--muted)'">BACKTEST ›</button>
-    <span class="mode-badge" id="h-status">● PAPER TRADING</span>
+  <!-- Controls — always visible, not part of the scrollable strip -->
+  <div class="h-controls">
+    <button class="btn-ghost" onclick="openBacktest()">BACKTEST ›</button>
+    <span class="mode-badge" id="h-status">&#9679; PAPER</span>
     <span id="clock">00:00:00</span>
   </div>
 </div>
 
-<!-- ══════════════════ MAIN GRID ══════════════════════════ -->
+<!-- ══════════════════ MAIN GRID (top ~52% of viewport) ═══════ -->
 <div id="main-grid" style="height:52vh;">
 
-  <!-- ── MISPRICING SCANNER ── -->
+  <!-- MISPRICING SCANNER -->
   <div class="panel" style="grid-row:1;grid-column:1;">
     <div class="panel-title">
-      <span class="slash">// </span>MISPRICING SCANNER
+      <span class="slash">// </span>SIGNAL SCANNER
       <span class="panel-badge" id="scanner-badge">0 EDGES</span>
+      <span class="panel-updated" id="scanner-updated"></span>
+    </div>
+    <!-- Scan progress bar — thin line that depletes over the 8s refresh interval -->
+    <div class="scan-progress-wrap">
+      <div class="scan-progress-bar" id="scanner-progress" style="width:100%"></div>
     </div>
     <div id="scanner-body">
-      <div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for scan…</div>
+      <div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for first scan&hellip;</div>
     </div>
   </div>
 
-  <!-- ── WALLET TRACKER ── -->
+  <!-- WALLET TRACKER -->
   <div class="panel" style="grid-row:1;grid-column:2;">
     <div class="panel-title">
-      <span class="slash">// </span>WALLET TRACKER
+      <span class="slash">// </span>ELITE WALLETS
       <span class="panel-badge green" id="wallet-badge">0 TRACKED</span>
     </div>
     <div id="wallet-body">
@@ -388,59 +697,73 @@
     </div>
   </div>
 
-  <!-- ── LIVE MARKETS ── -->
+  <!-- LIVE MARKETS -->
   <div class="panel" style="grid-row:1;grid-column:3;">
     <div class="panel-title">
       <span class="slash">// </span>LIVE MARKETS
       <span class="panel-badge green" id="markets-badge">WATCHING 0</span>
     </div>
     <div class="market-row mkt-header" style="border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:2px;">
-      <span>MARKET</span><span style="text-align:right">YES</span><span style="text-align:right">NO</span><span style="text-align:right">VOL</span>
+      <span>MARKET</span>
+      <span style="text-align:right">YES</span>
+      <span style="text-align:right">NO</span>
+      <span style="text-align:right">VOL</span>
     </div>
     <div id="markets-body">
-      <div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for scan…</div>
+      <div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for scan&hellip;</div>
     </div>
   </div>
 
-</div>
+</div><!-- /main-grid -->
 
-<!-- ══════════════════ BOTTOM GRID ════════════════════════ -->
+<!-- ══════════════════ BOTTOM GRID ════════════════════════════ -->
 <div id="bottom-grid" style="flex:1;min-height:0;">
 
-  <!-- ── TRADE FEED ── -->
+  <!-- TRADE FEED -->
   <div class="panel">
-    <div class="panel-title"><span class="slash">// </span>TRADE FEED</div>
-    <div class="trade-row" style="font-size:9px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:4px;">
-      <span>#</span><span>QUESTION</span><span style="text-align:center">DIR</span><span style="text-align:right">SIZE</span><span style="text-align:center">STATUS</span>
+    <div class="panel-title">
+      <span class="slash">// </span>TRADE FEED
     </div>
-    <div id="trades-body" style="overflow-y:auto;flex:1;">
+    <!-- Column headers match the 6-column grid defined in .trade-row -->
+    <div class="trade-row" style="font-size:9px;color:var(--muted);border-bottom:1px solid var(--border);padding-bottom:4px;">
+      <span>#</span>
+      <span>QUESTION</span>
+      <span style="text-align:center">DIR</span>
+      <span style="text-align:right">SIZE</span>
+      <span style="text-align:center">STATUS</span>
+      <span style="text-align:right">P&amp;L</span>
+    </div>
+    <div id="trades-body">
       <div style="color:var(--muted);padding:20px 0;text-align:center">No trades yet</div>
     </div>
   </div>
 
-  <!-- ── TRADE TIMELINE ── -->
+  <!-- TRADE TIMELINE -->
   <div class="panel">
     <div class="panel-title">
       <span class="slash">// </span>TRADE TIMELINE
       <span style="margin-left:auto;display:flex;align-items:center;gap:10px;font-size:9px;color:var(--muted)">
-        <span><span style="color:var(--green)">●</span> WON</span>
-        <span><span style="color:var(--red)">●</span> LOST</span>
-        <span><span style="color:var(--amber)">●</span> OPEN</span>
-        <span>PNL <span id="pnl-total" class="hstat-value pos" style="font-size:11px">+$0.00</span></span>
+        <span><span style="color:var(--green)">&#9679;</span> WON</span>
+        <span><span style="color:var(--red)">&#9679;</span> LOST</span>
+        <span><span style="color:var(--amber)">&#9679;</span> OPEN</span>
+        <span style="font-size:9px;color:var(--muted)">size = bubble radius</span>
+        &nbsp;
+        <span>P&amp;L <span id="pnl-total" class="hstat-value pos" style="font-size:11px">+$0.00</span></span>
       </span>
     </div>
-    <div id="timeline-chart-wrap" style="flex:1;position:relative;min-height:0;">
+    <div id="timeline-chart-wrap">
       <canvas id="timeline-chart"></canvas>
     </div>
   </div>
 
-  <!-- ── ACTIVITY LOG ── -->
+  <!-- ACTIVITY LOG -->
   <div class="panel">
     <div class="panel-title">
       <span class="slash">// </span>ACTIVITY LOG
-      <span style="margin-left:auto">
-        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 4px var(--green);animation:pulse 2s infinite;"></span>
-        LIVE
+      <span style="margin-left:auto;display:flex;align-items:center;gap:5px;">
+        <!-- Animated live indicator -->
+        <span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:var(--live-glow);animation:pulse 2s infinite;"></span>
+        <span style="color:var(--muted);font-size:9px;">LIVE</span>
       </span>
     </div>
     <div id="log-terminal"></div>
@@ -448,157 +771,201 @@
 
 </div><!-- /bottom-grid -->
 
-<style>
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-/* ── Backtest overlay ── */
-#bt-overlay {
-  display: none;
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,0.95);
-  z-index: 1000;
-  overflow-y: auto;
-  padding: 20px;
-  font-family: 'Courier New', monospace;
-  color: var(--green);
-}
-#bt-overlay .bt-close {
-  position: fixed; top: 12px; right: 20px;
-  background: transparent; border: 1px solid var(--muted);
-  color: var(--muted); font-family: inherit; font-size: 11px;
-  padding: 3px 10px; cursor: pointer; letter-spacing: 1px;
-}
-#bt-overlay .bt-close:hover { border-color: var(--red); color: var(--red); }
-.bt-title { font-size: 16px; font-weight: bold; letter-spacing: 2px; margin-bottom: 20px; }
-.bt-title span { color: var(--muted); }
-.bt-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-.bt-tab  { padding: 6px 16px; font-size: 10px; letter-spacing: 1px; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; }
-.bt-tab.active { color: var(--green); border-bottom-color: var(--green); }
-.bt-panel { display: none; }
-.bt-panel.active { display: block; }
-
-.bt-stat-row { display: flex; gap: 30px; margin-bottom: 20px; flex-wrap: wrap; }
-.bt-stat { display: flex; flex-direction: column; }
-.bt-stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-.bt-stat-value { font-size: 22px; font-weight: bold; }
-
-.bt-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 20px; }
-.bt-table th { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: left; }
-.bt-table td { padding: 4px 8px; border-bottom: 1px solid #0d1f0d; }
-.bt-table tr:hover td { background: var(--surface2); }
-
-.bt-section { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; margin-top: 20px; }
-.star { color: var(--amber); font-size: 12px; }
-
-.pred-correct  { color: var(--green); }
-.pred-wrong    { color: var(--red); }
-.pred-pending  { color: var(--muted); }
-
-.run-cmd {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  padding: 10px 14px;
-  font-size: 11px;
-  color: #9fd0af;
-  margin-bottom: 16px;
-  line-height: 1.8;
-}
-.run-cmd code { color: var(--amber); }
-</style>
-
 <script>
-// ──────────────────────────────────────────────────────────────
-// Utils
-// ──────────────────────────────────────────────────────────────
-const fmt$ = (v, sign=false) => {
-  const s = '$' + Math.abs(parseFloat(v)).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
-  return sign ? (v >= 0 ? '+'+s : '-'+s) : s;
+// ══════════════════════════════════════════════════════════════
+// UTILITIES
+// ══════════════════════════════════════════════════════════════
+
+const fmt$ = (v, sign = false) => {
+  const n = parseFloat(v);
+  const s = '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (!sign) return s;
+  return n >= 0 ? '+' + s : '-' + s;
 };
-const cents = v => Math.round(parseFloat(v) * 100) + '¢';
+const cents  = v => Math.round(parseFloat(v) * 100) + '¢';
 const fmtVol = v => {
   v = parseFloat(v);
-  if (v >= 1e6) return '$' + (v/1e6).toFixed(1) + 'M';
-  if (v >= 1e3) return '$' + (v/1e3).toFixed(0) + 'K';
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return '$' + (v / 1e3).toFixed(0) + 'K';
   return '$' + v.toFixed(0);
 };
 const pnlClass = v => parseFloat(v) >= 0 ? 'pos' : 'neg';
 const edgePct  = v => (Math.abs(parseFloat(v)) * 100).toFixed(2) + '%';
 
+// Escape HTML for tooltip titles to avoid XSS in dynamically-built innerHTML
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// Flash a DOM element briefly to signal a value changed
+function flashEl(el) {
+  el.classList.remove('flash');
+  // Force reflow so re-adding the class triggers the animation again
+  void el.offsetWidth;
+  el.classList.add('flash');
+}
+
 // ── Clock ──────────────────────────────────────────────────────
 function updateClock() {
-  const now = new Date();
-  document.getElementById('clock').textContent =
-    now.toTimeString().slice(0,8);
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0, 8);
 }
 setInterval(updateClock, 1000);
 updateClock();
 
-// ──────────────────────────────────────────────────────────────
-// Stats
-// ──────────────────────────────────────────────────────────────
+// ── "N seconds ago" formatter ──────────────────────────────────
+function secsAgo(ts) {
+  if (!ts || ts === '—') return '';
+  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 5)  return 'just now';
+  if (s < 60) return s + 's ago';
+  return Math.floor(s / 60) + 'm ago';
+}
+
+// ══════════════════════════════════════════════════════════════
+// SCAN PROGRESS BAR
+// Animates a depleting bar between 0→100% over the refresh interval.
+// Resets to 100% on each successful data refresh.
+// ══════════════════════════════════════════════════════════════
+const SIGNAL_REFRESH_MS = 8000;
+let scanBarStart = Date.now();
+
+function resetScanBar() {
+  scanBarStart = Date.now();
+  const bar = document.getElementById('scanner-progress');
+  if (bar) bar.style.width = '100%';
+}
+
+function tickScanBar() {
+  const bar = document.getElementById('scanner-progress');
+  if (!bar) return;
+  const elapsed = Date.now() - scanBarStart;
+  const pct = Math.max(0, 100 - (elapsed / SIGNAL_REFRESH_MS) * 100);
+  bar.style.width = pct.toFixed(1) + '%';
+  // Colour shifts amber when > 2× interval has passed without refresh (stale data)
+  bar.style.background = elapsed > SIGNAL_REFRESH_MS * 2 ? 'var(--amber)' : 'var(--green-d)';
+}
+setInterval(tickScanBar, 500);
+
+// ══════════════════════════════════════════════════════════════
+// STATS — header metrics
+// ══════════════════════════════════════════════════════════════
+let prevPnl = null;
+
 async function refreshStats() {
   try {
     const d = await fetch('/api/stats').then(r => r.json());
 
+    // P&L — flash when it changes
     const pnl = d.total_pnl;
     const pnlEl = document.getElementById('h-pnl');
-    pnlEl.textContent  = fmt$(pnl, true);
-    pnlEl.className    = 'hstat-value ' + pnlClass(pnl);
+    pnlEl.textContent = fmt$(pnl, true);
+    pnlEl.className   = 'hstat-value ' + pnlClass(pnl);
+    if (prevPnl !== null && prevPnl !== pnl) flashEl(pnlEl);
+    prevPnl = pnl;
 
-    document.getElementById('h-open').textContent    = d.open_count;
-    document.getElementById('h-scan').textContent    = '#' + (d.scan_count || 0);
-    document.getElementById('h-edges').textContent   = d.edges_found || 0;
-    document.getElementById('h-wallets').textContent = d.wallets_tracked || 0;
+    // Portfolio value
+    const portEl = document.getElementById('h-portfolio');
+    portEl.textContent = fmt$(d.portfolio_value);
+    // Colour: above starting balance = green, below = red
+    const portDelta = d.portfolio_value - d.starting_balance;
+    portEl.className = 'hstat-value ' + pnlClass(portDelta);
+
+    document.getElementById('h-open').textContent  = d.open_count;
+    document.getElementById('h-scan').textContent  = d.scan_count > 0 ? '#' + d.scan_count : '—';
+    document.getElementById('h-edges').textContent = d.edges_found || 0;
+
+    // Wallets — add context label for 0 case
+    const wEl = document.getElementById('h-wallets');
+    wEl.textContent = d.wallets_tracked || 0;
+    wEl.className   = 'hstat-value ' + (d.wallets_tracked > 0 ? 'pos' : 'neu');
+
     document.getElementById('h-balance').textContent = fmt$(d.balance);
 
-    const wr = d.won_count + d.lost_count > 0;
-    const winEl = document.getElementById('h-win');
-    winEl.textContent = wr ? d.win_rate.toFixed(1) + '%' : '—';
-    winEl.className   = 'hstat-value ' + (wr ? pnlClass(d.win_rate - 50) : '');
+    // Last scan timestamp
+    const lsEl = document.getElementById('h-last-scan');
+    if (d.last_scan && d.last_scan !== '—') {
+      lsEl.textContent = secsAgo(d.last_scan);
+      // Mark stale if > 2 minutes without a scan
+      const staleSecs = (Date.now() - new Date(d.last_scan).getTime()) / 1000;
+      lsEl.style.color = staleSecs > 120 ? 'var(--amber)' : 'var(--muted)';
+    } else {
+      lsEl.textContent = '—';
+    }
 
+    // W/L record display
+    const wlEl = document.getElementById('h-wl');
+    wlEl.textContent = d.won_count + ' / ' + d.lost_count;
+
+    // Win rate — use a higher threshold for "good" colouring in prediction markets:
+    // >55% is meaningfully profitable given typical odds; <45% is concerning
+    const hasWL   = d.won_count + d.lost_count > 0;
+    const winEl   = document.getElementById('h-win');
+    winEl.textContent = hasWL ? d.win_rate.toFixed(1) + '%' : '—';
+    if (hasWL) {
+      if (d.win_rate >= 55)     winEl.className = 'hstat-value pos';
+      else if (d.win_rate < 45) winEl.className = 'hstat-value neg';
+      else                      winEl.className = 'hstat-value neu';
+    } else {
+      winEl.className = 'hstat-value';
+    }
+
+    // Bot status badge
     const statusEl = document.getElementById('h-status');
     if (d.is_halted) {
       statusEl.textContent = '● HALTED';
       statusEl.style.color = 'var(--red)';
       statusEl.style.borderColor = 'var(--red)';
     } else {
-      statusEl.textContent = '● PAPER TRADING';
+      statusEl.textContent = '● PAPER';
       statusEl.style.color = 'var(--green)';
       statusEl.style.borderColor = 'var(--green-d)';
     }
 
-    document.getElementById('pnl-total').textContent = fmt$(pnl, true);
-    document.getElementById('pnl-total').className = 'hstat-value ' + pnlClass(pnl);
+    // Mirror P&L to timeline panel header
+    const pnlTotalEl = document.getElementById('pnl-total');
+    pnlTotalEl.textContent = fmt$(pnl, true);
+    pnlTotalEl.className   = 'hstat-value ' + pnlClass(pnl);
 
   } catch(e) { console.warn('stats', e); }
 }
 
-// ──────────────────────────────────────────────────────────────
-// Mispricing Scanner
-// ──────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// SIGNAL SCANNER CARDS
+// ══════════════════════════════════════════════════════════════
 async function refreshSignals() {
   try {
     const signals = await fetch('/api/signals').then(r => r.json());
-    const el = document.getElementById('scanner-body');
+    const el      = document.getElementById('scanner-body');
 
     const edges = signals.filter(s => s.should_trade).length;
     const badge = document.getElementById('scanner-badge');
     badge.textContent = edges + ' EDGE' + (edges !== 1 ? 'S' : '');
     badge.className   = 'panel-badge ' + (edges > 0 ? 'green' : '');
 
+    // Update "last refreshed" timestamp
+    const updatedEl = document.getElementById('scanner-updated');
+    const now       = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    updatedEl.textContent = 'updated ' + now;
+
+    // Reset the scan progress bar
+    resetScanBar();
+
     if (!signals.length) {
-      el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for scan…</div>';
+      el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for scan&hellip;</div>';
       return;
     }
 
     el.innerHTML = signals.map(s => {
-      const absEdge = Math.abs(s.edge);
-      const edgeLabel = (s.edge > 0 ? '+' : '-') + edgePct(s.edge) + ' EDGE';
-      const edgeCls = s.should_trade ? 'tradeable' : (absEdge > 0.05 ? 'pos' : 'neg');
+      const absEdge   = Math.abs(s.edge);
+      const edgeSign  = s.edge >= 0 ? '+' : '-';
+      const edgeLabel = edgeSign + edgePct(s.edge) + ' EDGE';
+      const edgeCls   = s.should_trade ? 'tradeable' : (absEdge > 0.05 ? 'pos' : 'neg');
 
-      let actionHtml = '';
+      // Direction pill — first visible element on the card
+      const dirPillCls = (s.direction || '').toUpperCase() === 'YES' ? 'yes' : 'no';
+
+      // Action status
+      let actionHtml;
       if (s.should_trade) {
-        actionHtml = `<span class="scan-btn btn-traded">● TRADED ${s.direction}</span>`;
+        actionHtml = `<span class="scan-btn btn-traded">&#9679; TRADED ${esc(s.direction)}</span>`;
       } else if (s.confidence === 'low') {
         actionHtml = `<span class="scan-btn btn-low-conf">LOW CONFIDENCE</span>`;
       } else {
@@ -607,42 +974,63 @@ async function refreshSignals() {
 
       const confCls = s.confidence === 'high' ? 'conf-high' : s.confidence === 'medium' ? 'conf-medium' : 'conf-low';
 
-      return `<div class="scan-card">
-        <div class="scan-q" title="${s.question}">${s.question}</div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      // Mispricing bar: market price (muted) vs Claude fair value (green), 0–100 scale
+      const mktPct  = (s.market_yes_price * 100).toFixed(1);
+      const fairPct = (s.claude_yes_probability * 100).toFixed(1);
+      const mktLeft  = Math.min(100, Math.max(0, parseFloat(mktPct)));
+      const fairLeft = Math.min(100, Math.max(0, parseFloat(fairPct)));
+
+      return `<div class="scan-card${s.should_trade ? ' is-tradeable' : ''}">
+        <!-- Row 1: direction + edge + confidence — all the key signals at a glance -->
+        <div class="scan-card-header">
+          <span class="dir-pill ${dirPillCls}">${esc(s.direction || '?')}</span>
           <span class="scan-edge ${edgeCls}">${edgeLabel}</span>
-          <span class="conf-badge ${confCls}">${s.confidence.toUpperCase()}</span>
-          ${s.wallet_alignment ? '<span class="conf-badge conf-high">WALLET ✓</span>' : ''}
+          <span class="conf-badge ${confCls}">${(s.confidence || '').toUpperCase()}</span>
+          ${s.wallet_alignment ? '<span class="conf-badge conf-high">WALLET &#10003;</span>' : ''}
         </div>
+        <!-- Row 2: question — 2-line clamp so longer questions are legible -->
+        <div class="scan-q" title="${esc(s.question)}">${esc(s.question)}</div>
+        <!-- Row 3: mispricing visualiser -->
+        <div class="scan-mispricing">
+          <span style="min-width:28px">${mktPct}¢</span>
+          <div class="misprice-bar-wrap">
+            <div class="misprice-mkt"  style="left:${mktLeft}%"></div>
+            <div class="misprice-fair" style="left:${fairLeft}%"></div>
+          </div>
+          <span style="min-width:28px;color:var(--green)">${fairPct}¢</span>
+          <span style="color:var(--muted2);font-size:8px">mkt&nbsp;&nbsp;&nbsp;&nbsp;fair</span>
+        </div>
+        <!-- Row 4: numeric meta -->
         <div class="scan-meta">
-          <span>POLY <strong>${cents(s.market_yes_price)}</strong></span>
-          <span>FAIR <strong>${cents(s.claude_yes_probability)}</strong></span>
           ${s.volume_usd ? '<span>VOL <strong>' + fmtVol(s.volume_usd) + '</strong></span>' : ''}
-          ${s.days_to_resolve != null ? '<span>RESOLVES <strong>' + (s.days_to_resolve < 1 ? 'TODAY' : Math.round(s.days_to_resolve) + 'd') + '</strong></span>' : ''}
+          ${s.days_to_resolve != null
+            ? '<span>RESOLVES <strong>' + (s.days_to_resolve < 1 ? 'TODAY' : Math.round(s.days_to_resolve) + 'd') + '</strong></span>'
+            : ''}
         </div>
         <div class="scan-actions">${actionHtml}</div>
       </div>`;
     }).join('');
+
   } catch(e) { console.warn('signals', e); }
 }
 
-// ──────────────────────────────────────────────────────────────
-// Live Markets
-// ──────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// LIVE MARKETS
+// ══════════════════════════════════════════════════════════════
 async function refreshMarkets() {
   try {
     const markets = await fetch('/api/markets').then(r => r.json());
-    const el = document.getElementById('markets-body');
+    const el      = document.getElementById('markets-body');
     document.getElementById('markets-badge').textContent = 'WATCHING ' + markets.length;
 
     if (!markets.length) {
-      el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for scan…</div>';
+      el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">Waiting for scan&hellip;</div>';
       return;
     }
 
     el.innerHTML = markets.map(m => `
       <div class="market-row">
-        <span class="mkt-q" title="${m.question}">${m.question}</span>
+        <span class="mkt-q" title="${esc(m.question)}">${esc(m.question)}</span>
         <span class="mkt-yes">${cents(m.yes)}</span>
         <span class="mkt-no">${cents(m.no)}</span>
         <span class="mkt-vol">${fmtVol(m.volume_usd || 0)}</span>
@@ -651,13 +1039,13 @@ async function refreshMarkets() {
   } catch(e) { console.warn('markets', e); }
 }
 
-// ──────────────────────────────────────────────────────────────
-// Trade Feed
-// ──────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// TRADE FEED — now includes P&L column
+// ══════════════════════════════════════════════════════════════
 async function refreshTrades() {
   try {
     const trades = await fetch('/api/trades').then(r => r.json());
-    const el = document.getElementById('trades-body');
+    const el     = document.getElementById('trades-body');
 
     if (!trades.length) {
       el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">No trades yet</div>';
@@ -665,39 +1053,43 @@ async function refreshTrades() {
     }
 
     el.innerHTML = trades.map(t => {
-      const pnl   = parseFloat(t.pnl || 0);
-      const sCls  = t.status === 'won' ? 's-won' : t.status === 'lost' ? 's-lost' : 's-open';
-      const dCls  = t.direction === 'YES' ? 'yes' : 'no';
-      const pnlStr = t.status === 'open' ? '<span style="color:var(--muted)">OPEN</span>' :
-                     `<span class="${pnlClass(pnl)}">${fmt$(pnl,true)}</span>`;
+      const pnl  = parseFloat(t.pnl || 0);
+      const sCls = t.status === 'won' ? 's-won' : t.status === 'lost' ? 's-lost' : 's-open';
+      const dCls = t.direction === 'YES' ? 'yes' : 'no';
+
+      // P&L cell: show value for closed trades, "OPEN" in amber for open ones
+      let pnlHtml;
+      if (t.status === 'open') {
+        pnlHtml = `<span class="t-pnl" style="color:var(--muted);font-weight:normal;">open</span>`;
+      } else {
+        pnlHtml = `<span class="t-pnl ${pnlClass(pnl)}">${fmt$(pnl, true)}</span>`;
+      }
+
       return `<div class="trade-row">
         <span class="t-id">#${t.id}</span>
-        <span class="t-q" title="${t.question}">${t.question}</span>
+        <span class="t-q" title="${esc(t.question)}">${esc(t.question)}</span>
         <span class="t-dir ${dCls}">${t.direction}</span>
         <span class="t-size">${fmt$(t.size_usd)}</span>
         <span class="t-status ${sCls}">${t.status.toUpperCase()}</span>
+        ${pnlHtml}
       </div>`;
     }).join('');
   } catch(e) { console.warn('trades', e); }
 }
 
-// ──────────────────────────────────────────────────────────────
-// Trade Timeline Chart
-// ──────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// TRADE TIMELINE CHART
+// ══════════════════════════════════════════════════════════════
 let timelineChart = null;
 
-// Register Chart.js adapter for time scale (use built-in date handling)
 const TIMELINE_COLORS = {
-  won:  { fill: 'rgba(0,255,65,0.85)',   border: '#00ff41' },
-  lost: { fill: 'rgba(255,59,59,0.85)',  border: '#ff3b3b' },
-  open: { fill: 'rgba(240,192,64,0.85)', border: '#f0c040' },
+  won:  { fill: 'rgba(0,255,65,0.85)',  border: '#00ff41' },
+  lost: { fill: 'rgba(255,59,59,0.85)', border: '#ff3b3b' },
+  open: { fill: 'rgba(240,192,64,0.85)',border: '#f0c040' },
 };
 
 function initChart() {
   const ctx = document.getElementById('timeline-chart').getContext('2d');
-
-  // Connector lines dataset (open→close segments, drawn as lines)
-  // Trade point datasets (won/lost/open)
   timelineChart = new Chart(ctx, {
     type: 'scatter',
     data: { datasets: [] },
@@ -709,14 +1101,12 @@ function initChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            title: items => {
-              const raw = items[0].raw;
-              return new Date(raw.openedAt).toLocaleString();
-            },
+            title: items => new Date(items[0].raw.openedAt).toLocaleString(),
             label: item => {
               const r = item.raw;
+              const q = r.question.length > 55 ? r.question.slice(0, 55) + '…' : r.question;
               const lines = [
-                r.question.length > 55 ? r.question.slice(0, 55) + '…' : r.question,
+                q,
                 `${r.direction}  |  entry: ${(r.entry_price * 100).toFixed(1)}¢  |  size: $${r.size_usd.toFixed(2)}`,
               ];
               if (r.status !== 'open') {
@@ -766,7 +1156,8 @@ function initChart() {
           title: {
             display: true,
             text: 'ENTRY PRICE',
-            color: '#2a4a35',
+            // Slightly lighter so it's actually visible against the black background
+            color: '#4a7a5a',
             font: { family: 'Courier New', size: 8 },
           },
         },
@@ -776,11 +1167,11 @@ function initChart() {
 }
 
 function buildTimelineDatasets(trades) {
-  // Connector lines: one dataset per closed trade (open→close horizontal segment)
+  // Connector lines: dashed horizontal line from open→close for each resolved trade
   const lineDatasets = trades
     .filter(t => t.closed_at)
     .map(t => {
-      const col = TIMELINE_COLORS[t.status] || TIMELINE_COLORS.open;
+      const col    = TIMELINE_COLORS[t.status] || TIMELINE_COLORS.open;
       const openMs  = new Date(t.timestamp).getTime();
       const closeMs = new Date(t.closed_at).getTime();
       return {
@@ -799,26 +1190,25 @@ function buildTimelineDatasets(trades) {
       };
     });
 
-  // Group trade points by status
+  // Point datasets grouped by status (won/lost/open)
   const groups = { won: [], lost: [], open: [] };
   for (const t of trades) {
     const status = groups[t.status] ? t.status : 'open';
     const openMs = new Date(t.timestamp).getTime();
-    // Bubble size proportional to trade size (min 6, max 18)
+    // Bubble radius proportional to trade size ($4 ≈ 1px radius unit)
     const r = Math.max(6, Math.min(18, t.size_usd / 4));
     groups[status].push({
       x: openMs,
       y: t.entry_price,
       r,
-      // Extra fields for tooltip
-      question: t.question,
-      direction: t.direction,
+      question:    t.question,
+      direction:   t.direction,
       entry_price: t.entry_price,
-      size_usd: t.size_usd,
-      status: t.status,
-      pnl: t.pnl || 0,
-      openedAt: t.timestamp,
-      closedAt: t.closed_at,
+      size_usd:    t.size_usd,
+      status:      t.status,
+      pnl:         t.pnl || 0,
+      openedAt:    t.timestamp,
+      closedAt:    t.closed_at,
     });
   }
 
@@ -829,10 +1219,10 @@ function buildTimelineDatasets(trades) {
       type: 'scatter',
       data: pts,
       backgroundColor: col.fill,
-      borderColor: col.border,
-      borderWidth: 1.5,
-      pointRadius: pts.map(p => p.r),
-      pointHoverRadius: pts.map(p => p.r + 3),
+      borderColor:     col.border,
+      borderWidth:     1.5,
+      pointRadius:     pts.map(p => p.r),
+      pointHoverRadius:pts.map(p => p.r + 3),
       order: 1,
     };
   });
@@ -845,14 +1235,6 @@ async function refreshChart() {
     const trades = await fetch('/api/trade-timeline').then(r => r.json());
     if (!timelineChart) return;
 
-    // Also update the PnL total from stats
-    try {
-      const stats = await fetch('/api/stats').then(r => r.json());
-      const pnl = stats.total_pnl;
-      document.getElementById('pnl-total').textContent = fmt$(pnl, true);
-      document.getElementById('pnl-total').className = 'hstat-value ' + pnlClass(pnl);
-    } catch {}
-
     if (!trades.length) {
       timelineChart.data.datasets = [];
       timelineChart.update('none');
@@ -864,9 +1246,9 @@ async function refreshChart() {
   } catch(e) { console.warn('timeline chart', e); }
 }
 
-// ──────────────────────────────────────────────────────────────
-// Log Stream (SSE)
-// ──────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// LOG STREAM (SSE)
+// ══════════════════════════════════════════════════════════════
 const LEVEL_COLOR = {
   DEBUG:    'log-DEBUG',
   INFO:     'log-INFO',
@@ -876,11 +1258,12 @@ const LEVEL_COLOR = {
 };
 
 function appendLog(entry) {
-  const el = document.getElementById('log-terminal');
+  const el   = document.getElementById('log-terminal');
   const line = document.createElement('div');
-  line.className = 'log-line ' + (LEVEL_COLOR[entry.level] || 'log-INFO');
+  line.className  = 'log-line ' + (LEVEL_COLOR[entry.level] || 'log-INFO');
   line.textContent = entry.msg;
   el.appendChild(line);
+  // Cap at 300 lines to avoid unbounded memory growth
   while (el.children.length > 300) el.removeChild(el.firstChild);
   el.scrollTop = el.scrollHeight;
 }
@@ -893,27 +1276,35 @@ function startSSE() {
   es.onerror = () => { es.close(); setTimeout(startSSE, 3000); };
 }
 
-// ──────────────────────────────────────────────────────────────
-// Boot
-// ──────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+// BOOT SEQUENCE
+// ══════════════════════════════════════════════════════════════
 initChart();
 startSSE();
 
+// Initial data load
 refreshStats();
 refreshSignals();
 refreshMarkets();
 refreshTrades();
 refreshChart();
 
+// Polling intervals
 setInterval(refreshStats,   5000);
-setInterval(refreshSignals, 8000);
+setInterval(refreshSignals, SIGNAL_REFRESH_MS);
 setInterval(refreshMarkets, 8000);
 setInterval(refreshTrades,  10000);
 setInterval(refreshChart,   20000);
 
-// ──────────────────────────────────────────────────────────────
-// Backtest Overlay
-// ──────────────────────────────────────────────────────────────
+// Update "N seconds ago" in last-scan without waiting for full stats refresh
+setInterval(() => {
+  const el = document.getElementById('h-last-scan');
+  if (el && el._lastScanTs) el.textContent = secsAgo(el._lastScanTs);
+}, 5000);
+
+// ══════════════════════════════════════════════════════════════
+// BACKTEST OVERLAY
+// ══════════════════════════════════════════════════════════════
 let btLoaded = false;
 
 function openBacktest() {
@@ -927,7 +1318,10 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeBacktes
 
 function switchBtTab(tab) {
   document.querySelectorAll('.bt-tab').forEach((t, i) => {
-    t.classList.toggle('active', (i === 0 && tab === 'historical') || (i === 1 && tab === 'tracker'));
+    t.classList.toggle('active',
+      (i === 0 && tab === 'historical') ||
+      (i === 1 && tab === 'tracker')
+    );
   });
   document.getElementById('bt-historical').classList.toggle('active', tab === 'historical');
   document.getElementById('bt-tracker').classList.toggle('active', tab === 'tracker');
@@ -945,79 +1339,148 @@ async function loadHistorical() {
       el.innerHTML = '<div style="color:var(--muted);padding:30px 0;">No backtest run yet. Run the command above to generate results.</div>';
       return;
     }
-    const s = d.summary || {};
-    const ts = s.threshold_stats || [];
-    const cs = s.confidence_stats || {};
+    const s   = d.summary || {};
+    const ts  = s.threshold_stats || [];
+    const cs  = s.confidence_stats || {};
     const cal = s.calibration || [];
-    const bestThreshold = ts.reduce((best, t) => (!best || t.expected_value > best.expected_value) ? t : best, null);
+    const bestThreshold = ts.reduce(
+      (best, t) => (!best || t.expected_value > best.expected_value) ? t : best, null
+    );
 
     el.innerHTML = `
       <div class="bt-stat-row">
-        <div class="bt-stat"><div class="bt-stat-label">Run Date</div><div class="bt-stat-value" style="font-size:13px">${new Date(d.run_at).toLocaleString()}</div></div>
-        <div class="bt-stat"><div class="bt-stat-label">Markets Analysed</div><div class="bt-stat-value">${d.markets_n}</div></div>
-        <div class="bt-stat"><div class="bt-stat-label">Directional Accuracy</div><div class="bt-stat-value ${d.directional_accuracy >= 0.5 ? 'pred-correct' : 'pred-wrong'}">${(d.directional_accuracy * 100).toFixed(1)}%</div></div>
-        <div class="bt-stat"><div class="bt-stat-label">Optimal Threshold</div><div class="bt-stat-value" style="color:var(--amber)">${(d.best_threshold * 100).toFixed(0)}%</div></div>
-        <div class="bt-stat"><div class="bt-stat-label">Best EV/Market</div><div class="bt-stat-value ${d.best_ev >= 0 ? 'pred-correct' : 'pred-wrong'}">${d.best_ev >= 0 ? '+' : ''}${d.best_ev?.toFixed(4)}</div></div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Run Date</div>
+          <div class="bt-stat-value" style="font-size:13px">${new Date(d.run_at).toLocaleString()}</div>
+        </div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Markets Analysed</div>
+          <div class="bt-stat-value">${d.markets_n}</div>
+        </div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Directional Accuracy</div>
+          <div class="bt-stat-value ${d.directional_accuracy >= 0.55 ? 'pred-correct' : d.directional_accuracy < 0.45 ? 'pred-wrong' : ''}">${(d.directional_accuracy * 100).toFixed(1)}%</div>
+        </div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Optimal Threshold</div>
+          <div class="bt-stat-value" style="color:var(--amber)">${(d.best_threshold * 100).toFixed(0)}%</div>
+        </div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Best EV/Market</div>
+          <div class="bt-stat-value ${d.best_ev >= 0 ? 'pred-correct' : 'pred-wrong'}">${d.best_ev >= 0 ? '+' : ''}${d.best_ev?.toFixed(4)}</div>
+        </div>
       </div>
 
       <div class="bt-section">// THRESHOLD OPTIMISATION (synthetic entry @ 50c)</div>
-      <table class="bt-table"><thead><tr><th>Edge Threshold</th><th>Trades Triggered</th><th>Win Rate</th><th>Avg PnL/Trade</th><th>EV per Market</th><th></th></tr></thead>
-      <tbody>${ts.map(t => `<tr>
-        <td>${(t.threshold * 100).toFixed(0)}%</td>
-        <td>${t.trades}</td>
-        <td class="${t.win_rate >= 0.5 ? 'pred-correct' : 'pred-wrong'}">${(t.win_rate * 100).toFixed(1)}%</td>
-        <td class="${t.avg_pnl >= 0 ? 'pred-correct' : 'pred-wrong'}">${t.avg_pnl >= 0 ? '+' : ''}${t.avg_pnl?.toFixed(4)}</td>
-        <td class="${t.expected_value >= 0 ? 'pred-correct' : 'pred-wrong'}">${t.expected_value >= 0 ? '+' : ''}${t.expected_value?.toFixed(4)}</td>
-        <td>${bestThreshold && t.threshold === bestThreshold.threshold ? '<span class="star">&#9733; OPTIMAL</span>' : ''}</td>
-      </tr>`).join('')}</tbody></table>
+      <table class="bt-table">
+        <thead><tr>
+          <th>Edge Threshold</th><th>Trades</th><th>Win Rate</th>
+          <th>Avg P&amp;L/Trade</th><th>EV/Market</th><th></th>
+        </tr></thead>
+        <tbody>${ts.map(t => `<tr>
+          <td>${(t.threshold * 100).toFixed(0)}%</td>
+          <td>${t.trades}</td>
+          <td class="${t.win_rate >= 0.55 ? 'pred-correct' : t.win_rate < 0.45 ? 'pred-wrong' : ''}">${(t.win_rate * 100).toFixed(1)}%</td>
+          <td class="${t.avg_pnl >= 0 ? 'pred-correct' : 'pred-wrong'}">${t.avg_pnl >= 0 ? '+' : ''}${t.avg_pnl?.toFixed(4)}</td>
+          <td class="${t.expected_value >= 0 ? 'pred-correct' : 'pred-wrong'}">${t.expected_value >= 0 ? '+' : ''}${t.expected_value?.toFixed(4)}</td>
+          <td>${bestThreshold && t.threshold === bestThreshold.threshold ? '<span class="star">&#9733; OPTIMAL</span>' : ''}</td>
+        </tr>`).join('')}</tbody>
+      </table>
 
       <div class="bt-section">// ACCURACY BY CONFIDENCE LEVEL</div>
-      <table class="bt-table"><thead><tr><th>Confidence</th><th>Markets</th><th>Correct</th><th>Accuracy</th></tr></thead>
-      <tbody>${Object.entries(cs).map(([level, d]) => `<tr>
-        <td style="text-transform:uppercase">${level}</td><td>${d.total}</td><td>${d.correct}</td>
-        <td class="${d.accuracy >= 0.5 ? 'pred-correct' : 'pred-wrong'}">${(d.accuracy * 100).toFixed(1)}%</td>
-      </tr>`).join('')}</tbody></table>
+      <table class="bt-table">
+        <thead><tr><th>Confidence</th><th>Markets</th><th>Correct</th><th>Accuracy</th></tr></thead>
+        <tbody>${Object.entries(cs).map(([level, d]) => `<tr>
+          <td style="text-transform:uppercase">${level}</td>
+          <td>${d.total}</td>
+          <td>${d.correct}</td>
+          <td class="${d.accuracy >= 0.55 ? 'pred-correct' : d.accuracy < 0.45 ? 'pred-wrong' : ''}">${(d.accuracy * 100).toFixed(1)}%</td>
+        </tr>`).join('')}</tbody>
+      </table>
 
       <div class="bt-section">// CALIBRATION CURVE</div>
-      <table class="bt-table"><thead><tr><th>Bucket</th><th>N</th><th>Avg Predicted</th><th>Actual Rate</th><th>Bias</th></tr></thead>
-      <tbody>${cal.filter(r => r.n > 0 && r.actual_rate !== null).map(r => {
-        const diff = r.actual_rate - r.avg_predicted;
-        return `<tr><td>${r.bucket}</td><td>${r.n}</td><td>${(r.avg_predicted*100).toFixed(1)}%</td><td>${(r.actual_rate*100).toFixed(1)}%</td><td class="${diff >= 0 ? 'pred-correct' : 'pred-wrong'}">${diff >= 0 ? '+' : ''}${(diff*100).toFixed(1)}%</td></tr>`;
-      }).join('')}</tbody></table>`;
-  } catch(e) { el.innerHTML = `<div style="color:var(--red)">Error: ${e}</div>`; }
+      <table class="bt-table">
+        <thead><tr><th>Bucket</th><th>N</th><th>Avg Predicted</th><th>Actual Rate</th><th>Bias</th></tr></thead>
+        <tbody>${cal.filter(r => r.n > 0 && r.actual_rate !== null).map(r => {
+          const diff = r.actual_rate - r.avg_predicted;
+          return `<tr>
+            <td>${r.bucket}</td><td>${r.n}</td>
+            <td>${(r.avg_predicted * 100).toFixed(1)}%</td>
+            <td>${(r.actual_rate * 100).toFixed(1)}%</td>
+            <td class="${diff >= 0 ? 'pred-correct' : 'pred-wrong'}">${diff >= 0 ? '+' : ''}${(diff * 100).toFixed(1)}%</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+  } catch(e) { el.innerHTML = `<div style="color:var(--red)">Error loading backtest: ${e}</div>`; }
 }
 
 async function loadTracker() {
   const el = document.getElementById('bt-tracker-content');
   try {
-    const d = await fetch('/api/backtest/tracker').then(r => r.json());
-    const s = d.stats || {};
+    const d    = await fetch('/api/backtest/tracker').then(r => r.json());
+    const s    = d.stats || {};
     const preds = d.predictions || [];
 
-    const dirAcc  = s.directional_accuracy != null ? `<span class="${s.directional_accuracy >= 0.5 ? 'pred-correct' : 'pred-wrong'}">${(s.directional_accuracy * 100).toFixed(1)}%</span>` : '<span style="color:var(--muted)">pending</span>';
-    const trdAcc  = s.traded_accuracy != null ? `<span class="${s.traded_accuracy >= 0.5 ? 'pred-correct' : 'pred-wrong'}">${(s.traded_accuracy * 100).toFixed(1)}%</span>` : '<span style="color:var(--muted)">pending</span>';
+    const dirAcc = s.directional_accuracy != null
+      ? `<span class="${s.directional_accuracy >= 0.55 ? 'pred-correct' : s.directional_accuracy < 0.45 ? 'pred-wrong' : ''}">${(s.directional_accuracy * 100).toFixed(1)}%</span>`
+      : '<span style="color:var(--muted)">pending</span>';
+
+    const trdAcc = s.traded_accuracy != null
+      ? `<span class="${s.traded_accuracy >= 0.55 ? 'pred-correct' : s.traded_accuracy < 0.45 ? 'pred-wrong' : ''}">${(s.traded_accuracy * 100).toFixed(1)}%</span>`
+      : '<span style="color:var(--muted)">pending</span>';
 
     el.innerHTML = `
       <div style="color:var(--muted);font-size:10px;margin-bottom:16px;line-height:1.8">
         Every market Claude analyses is logged here. When markets resolve, outcomes are scored automatically every 10 scans.
       </div>
       <div class="bt-stat-row">
-        <div class="bt-stat"><div class="bt-stat-label">Predictions Logged</div><div class="bt-stat-value">${s.total_predictions || 0}</div></div>
-        <div class="bt-stat"><div class="bt-stat-label">Markets Resolved</div><div class="bt-stat-value">${s.resolved || 0}</div></div>
-        <div class="bt-stat"><div class="bt-stat-label">Directional Accuracy</div><div class="bt-stat-value">${dirAcc}</div></div>
-        <div class="bt-stat"><div class="bt-stat-label">Traded Accuracy</div><div class="bt-stat-value">${trdAcc}</div></div>
-        <div class="bt-stat"><div class="bt-stat-label">Simulated PnL/Unit</div><div class="bt-stat-value ${(s.simulated_pnl||0) >= 0 ? 'pred-correct' : 'pred-wrong'}">${(s.simulated_pnl||0) >= 0 ? '+' : ''}${(s.simulated_pnl||0).toFixed(4)}</div></div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Predictions Logged</div>
+          <div class="bt-stat-value">${s.total_predictions || 0}</div>
+        </div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Markets Resolved</div>
+          <div class="bt-stat-value">${s.resolved || 0}</div>
+        </div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Directional Accuracy</div>
+          <div class="bt-stat-value">${dirAcc}</div>
+        </div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Traded Accuracy</div>
+          <div class="bt-stat-value">${trdAcc}</div>
+        </div>
+        <div class="bt-stat">
+          <div class="bt-stat-label">Simulated P&amp;L/Unit</div>
+          <div class="bt-stat-value ${(s.simulated_pnl || 0) >= 0 ? 'pred-correct' : 'pred-wrong'}">${(s.simulated_pnl || 0) >= 0 ? '+' : ''}${(s.simulated_pnl || 0).toFixed(4)}</div>
+        </div>
       </div>
       <div class="bt-section">// RECENT PREDICTIONS</div>
-      <table class="bt-table"><thead><tr><th>Question</th><th>Claude%</th><th>Mkt%</th><th>Edge</th><th>Conf</th><th>Trade?</th><th>Result</th></tr></thead>
-      <tbody>${preds.map(p => {
-        const cp  = p.claude_yes_prob != null ? (p.claude_yes_prob*100).toFixed(0)+'%' : '—';
-        const mp  = p.market_yes_price != null ? (p.market_yes_price*100).toFixed(0)+'%' : '—';
-        const edg = p.edge != null ? (p.edge >= 0 ? '+' : '') + (p.edge*100).toFixed(1)+'%' : '—';
-        const res = p.resolved_yes === null ? '<span class="pred-pending">PENDING</span>' : p.outcome_correct ? '<span class="pred-correct">&#10003; CORRECT</span>' : '<span class="pred-wrong">&#10007; WRONG</span>';
-        return `<tr><td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${p.question}">${p.question}</td><td>${cp}</td><td>${mp}</td><td class="${(p.edge||0) >= 0 ? 'pred-correct' : 'pred-wrong'}">${edg}</td><td style="font-size:9px;color:var(--muted);text-transform:uppercase">${p.confidence||'—'}</td><td>${p.should_trade ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--muted)">NO</span>'}</td><td>${res}</td></tr>`;
-      }).join('')}</tbody></table>`;
-  } catch(e) { el.innerHTML = `<div style="color:var(--red)">Error: ${e}</div>`; }
+      <table class="bt-table">
+        <thead><tr>
+          <th>Question</th><th>Claude%</th><th>Mkt%</th>
+          <th>Edge</th><th>Conf</th><th>Trade?</th><th>Result</th>
+        </tr></thead>
+        <tbody>${preds.map(p => {
+          const cp  = p.claude_yes_prob  != null ? (p.claude_yes_prob * 100).toFixed(0) + '%'  : '—';
+          const mp  = p.market_yes_price != null ? (p.market_yes_price * 100).toFixed(0) + '%' : '—';
+          const edg = p.edge != null ? (p.edge >= 0 ? '+' : '') + (p.edge * 100).toFixed(1) + '%' : '—';
+          const res = p.resolved_yes === null
+            ? '<span class="pred-pending">PENDING</span>'
+            : p.outcome_correct
+              ? '<span class="pred-correct">&#10003; CORRECT</span>'
+              : '<span class="pred-wrong">&#10007; WRONG</span>';
+          return `<tr>
+            <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(p.question)}">${esc(p.question)}</td>
+            <td>${cp}</td><td>${mp}</td>
+            <td class="${(p.edge || 0) >= 0 ? 'pred-correct' : 'pred-wrong'}">${edg}</td>
+            <td style="font-size:9px;color:var(--muted);text-transform:uppercase">${p.confidence || '—'}</td>
+            <td>${p.should_trade ? '<span style="color:var(--green)">YES</span>' : '<span style="color:var(--muted)">NO</span>'}</td>
+            <td>${res}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+  } catch(e) { el.innerHTML = `<div style="color:var(--red)">Error loading tracker: ${e}</div>`; }
 }
 </script>
 </body>
