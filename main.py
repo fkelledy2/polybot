@@ -62,7 +62,7 @@ def main():
     polymarket     = PolymarketClient()
     wallet_tracker = WalletTracker()
     paper_trader   = PaperTrader()
-    risk_manager   = RiskManager(starting_balance=paper_trader.balance)
+    risk_manager   = RiskManager(starting_balance=paper_trader.portfolio_value)
 
     shared_state.update({
         "model":           CLAUDE_MODEL,
@@ -209,7 +209,7 @@ def main():
                 )
 
             ok, reason = risk_manager.can_trade(
-                paper_trader.balance,
+                paper_trader.portfolio_value,
                 signal,
                 open_positions=paper_trader.open_positions,
                 portfolio_value=paper_trader.portfolio_value,
@@ -254,18 +254,20 @@ def main():
 
         # S3-4: daily P&L summary every 24 scans
         if scan_count % 24 == 0:
-            stats_balance = paper_trader.balance
-            start_bal = paper_trader.portfolio_value
-            pnl_pct = (stats_balance - start_bal) / start_bal if start_bal > 0 else 0
-            open_count = len(paper_trader.open_positions)
+            pv = paper_trader.portfolio_value
+            start_pv = risk_manager.day_start_balance
+            pnl_pct = (pv - start_pv) / start_pv if start_pv > 0 else 0
             notify(
-                f"📊 Daily summary: balance=${stats_balance:.0f} | "
-                f"open={open_count}"
+                f"📊 Daily summary: portfolio=${pv:.0f} | "
+                f"day P&L={pnl_pct:+.1%} | open={len(paper_trader.open_positions)}"
             )
 
-        # S3-4: notify halt
-        if risk_manager.is_halted:
+        # S3-4: notify halt (only once per halt event, not every scan)
+        if risk_manager.is_halted and not getattr(risk_manager, "_halt_notified", False):
             notify("🛑 Bot halted: daily loss limit hit")
+            risk_manager._halt_notified = True
+        elif not risk_manager.is_halted:
+            risk_manager._halt_notified = False
 
         # Weekly: prune old price history
         if scan_count % 1440 == 0:

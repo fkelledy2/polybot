@@ -122,9 +122,11 @@ def check_stop_losses(paper_trader, markets: list[dict]) -> int:
             adverse_move = entry_no - current_no             # positive = bad for NO
 
         if adverse_move >= 2.0 * abs_edge:
-            exit_yes = current_yes
-            resolved_yes = trade.direction == "YES"  # treat as loss direction
-            # Close at current price, not binary resolution
+            # Stop-loss always closes at a loss. resolved_yes must produce won=False:
+            # won = (dir=="YES" and resolved_yes) or (dir=="NO" and not resolved_yes)
+            # For YES position: resolved_yes=False → won=False ✓
+            # For NO  position: resolved_yes=True  → won=False ✓
+            resolved_yes = trade.direction == "NO"
             result = paper_trader.close_trade(
                 market_id,
                 resolved_yes=resolved_yes,

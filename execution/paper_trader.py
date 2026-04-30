@@ -212,7 +212,6 @@ class PaperTrader:
                 VALUES ({_ph},{_ph},{_ph},{_ph},{_ph},{_ph},{_ph},'open',{_ph},{_ph})
             """, _insert_vals)
             trade.trade_id = c.lastrowid
-            trade.trade_id = c.lastrowid
 
         c.execute(
             f"INSERT INTO balance_log (timestamp, balance, event) VALUES ({_ph}, {_ph}, {_ph})",
