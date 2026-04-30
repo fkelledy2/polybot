@@ -1251,6 +1251,10 @@ async function refreshPortfolioChart() {
     const firstDateStr = data.length > 0 ? new Date(data[0]?.t).toLocaleDateString() : 'N/A';
     const lastDateStr = data.length > 0 ? new Date(data[data.length - 1]?.t).toLocaleDateString() : 'N/A';
     console.log('[PORTFOLIO] Data received:', { count: data.length, dateRange: `${firstDateStr} → ${lastDateStr}` });
+    if (data.length > 0) {
+      console.log('[PORTFOLIO] Raw first timestamp:', data[0].t, 'parsed:', new Date(data[0].t));
+      console.log('[PORTFOLIO] Raw last timestamp:', data[data.length - 1].t, 'parsed:', new Date(data[data.length - 1].t));
+    }
 
     if (!portfolioChart) return;
 

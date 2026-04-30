@@ -222,17 +222,21 @@ def api_positions():
 @app.route("/api/pnl-history")
 def api_pnl_history():
     try:
+        from datetime import datetime, timedelta
         conn = _db()
         c = db.get_cursor(conn)
-        # Fetch only the last 30 days of balance history to avoid cluttering with old test data
+        # Calculate 30 days ago (works with both SQLite and Postgres)
+        thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        # Fetch balance history from the last 30 days
         c.execute("""
             SELECT timestamp, balance FROM balance_log
-            WHERE timestamp >= datetime('now', '-30 days')
+            WHERE timestamp >= ?
             ORDER BY id
-        """)
+        """, (thirty_days_ago,))
         rows = [{"t": r["timestamp"], "b": round(r["balance"], 2)} for r in c.fetchall()]
         conn.close()
-    except Exception:
+    except Exception as e:
+        print(f"Error fetching pnl-history: {e}")
         rows = []
     return jsonify(rows)
 
