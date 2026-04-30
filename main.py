@@ -10,7 +10,8 @@ import time
 from datetime import datetime
 
 from config import (CLAUDE_MODEL, MAX_DAYS_TO_RESOLVE, MIN_DAYS_TO_RESOLVE,
-                    PAPER_TRADING, SCAN_INTERVAL_SECONDS, TOP_WALLETS_TO_TRACK)
+                    PAPER_TRADING, SCAN_INTERVAL_SECONDS, TOP_WALLETS_TO_TRACK,
+                    ENABLE_WALLET_TRACKING)
 from data.polymarket import PolymarketClient
 from data.wallet_tracker import WalletTracker
 from execution.paper_trader import PaperTrader
@@ -60,7 +61,7 @@ def main():
     logger.info("Web dashboard started → http://localhost:8080")
 
     polymarket     = PolymarketClient()
-    wallet_tracker = WalletTracker()
+    wallet_tracker = WalletTracker() if ENABLE_WALLET_TRACKING else None
     paper_trader   = PaperTrader()
     risk_manager   = RiskManager(starting_balance=paper_trader.portfolio_value)
 
@@ -71,9 +72,13 @@ def main():
         "is_halted":       False,
     })
 
-    logger.info(f"Building elite wallet list (top {TOP_WALLETS_TO_TRACK})...")
-    elite_wallets = wallet_tracker.build_elite_list(top_n=TOP_WALLETS_TO_TRACK)
-    logger.info(f"Tracking {len(elite_wallets)} elite wallets")
+    elite_wallets = []
+    if ENABLE_WALLET_TRACKING:
+        logger.info(f"Building elite wallet list (top {TOP_WALLETS_TO_TRACK})...")
+        elite_wallets = wallet_tracker.build_elite_list(top_n=TOP_WALLETS_TO_TRACK)
+        logger.info(f"Tracking {len(elite_wallets)} elite wallets")
+    else:
+        logger.info("Wallet tracking disabled (Polymarket leaderboard API unavailable)")
 
     scan_count  = 0
     batch_id_pending: str | None = None
@@ -152,7 +157,7 @@ def main():
                 arb_notes[mkt["market_id"]] = note
 
         # ── 2. Wallet signals ─────────────────────────────────
-        wallet_signals = wallet_tracker.get_elite_signals()
+        wallet_signals = wallet_tracker.get_elite_signals() if ENABLE_WALLET_TRACKING else []
 
         # ── 3. Enrich markets ─────────────────────────────────
         enrichment = enrich_markets(markets_parsed)

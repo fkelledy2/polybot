@@ -657,6 +657,10 @@
       <div class="hstat-value" id="h-scan">—</div>
     </div>
     <div class="hstat">
+      <div class="hstat-label">API</div>
+      <div class="hstat-value neu" id="h-api" title="API connectivity status">✓ OK</div>
+    </div>
+    <div class="hstat">
       <div class="hstat-label">BALANCE</div>
       <!-- No hardcoded $600 — show dash until first API response -->
       <div class="hstat-value" id="h-balance">—</div>
@@ -948,12 +952,27 @@ async function refreshStats() {
 }
 
 // ══════════════════════════════════════════════════════════════
+// API STATUS
+// ══════════════════════════════════════════════════════════════
+function updateApiStatus(ok) {
+  const el = document.getElementById('h-api');
+  if (ok) {
+    el.textContent = '✓ OK';
+    el.style.color = 'var(--green)';
+  } else {
+    el.textContent = '✗ FAIL';
+    el.style.color = 'var(--red)';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // SIGNAL SCANNER CARDS
 // ══════════════════════════════════════════════════════════════
 async function refreshSignals() {
+  const el = document.getElementById('scanner-body');
   try {
     const signals = await fetch('/api/signals').then(r => r.json());
-    const el      = document.getElementById('scanner-body');
+    updateApiStatus(true);
 
     const edges = signals.filter(s => s.should_trade).length;
     const badge = document.getElementById('scanner-badge');
@@ -1032,8 +1051,9 @@ async function refreshSignals() {
     }).join('');
 
   } catch(e) {
-    console.error('refreshSignals error:', e, {signalCount: signals?.length, firstSignal: signals?.[0]});
-    el.innerHTML = `<div style="color:var(--red);padding:10px">Error rendering signals: ${e.message}</div>`;
+    console.error('refreshSignals error:', e);
+    updateApiStatus(false);
+    if (el) el.innerHTML = `<div style="color:var(--red);padding:10px">Error loading signals: ${e.message}</div>`;
   }
 }
 
@@ -1041,9 +1061,10 @@ async function refreshSignals() {
 // LIVE MARKETS
 // ══════════════════════════════════════════════════════════════
 async function refreshMarkets() {
+  const el = document.getElementById('markets-body');
   try {
     const markets = await fetch('/api/markets').then(r => r.json());
-    const el      = document.getElementById('markets-body');
+    updateApiStatus(true);
     document.getElementById('markets-badge').textContent = 'WATCHING ' + markets.length;
 
     if (!markets.length) {
@@ -1060,8 +1081,9 @@ async function refreshMarkets() {
       </div>
     `).join('');
   } catch(e) {
-    console.error('refreshMarkets error:', e, {marketCount: markets?.length, firstMarket: markets?.[0]});
-    el.innerHTML = `<div style="color:var(--red);padding:10px">Error rendering markets: ${e.message}</div>`;
+    console.error('refreshMarkets error:', e);
+    updateApiStatus(false);
+    if (el) el.innerHTML = `<div style="color:var(--red);padding:10px">Error loading markets: ${e.message}</div>`;
   }
 }
 
