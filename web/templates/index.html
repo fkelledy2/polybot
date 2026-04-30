@@ -1248,7 +1248,9 @@ async function refreshPortfolioChart() {
       return;
     }
     const data = await response.json();
-    console.log('[PORTFOLIO] Data received:', { count: data.length, firstDate: data[0]?.t, lastDate: data[data.length - 1]?.t });
+    const firstDateStr = data.length > 0 ? new Date(data[0]?.t).toLocaleDateString() : 'N/A';
+    const lastDateStr = data.length > 0 ? new Date(data[data.length - 1]?.t).toLocaleDateString() : 'N/A';
+    console.log('[PORTFOLIO] Data received:', { count: data.length, dateRange: `${firstDateStr} → ${lastDateStr}` });
 
     if (!portfolioChart) return;
 

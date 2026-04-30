@@ -224,7 +224,12 @@ def api_pnl_history():
     try:
         conn = _db()
         c = db.get_cursor(conn)
-        c.execute("SELECT timestamp, balance FROM balance_log ORDER BY id")
+        # Fetch only the last 30 days of balance history to avoid cluttering with old test data
+        c.execute("""
+            SELECT timestamp, balance FROM balance_log
+            WHERE timestamp >= datetime('now', '-30 days')
+            ORDER BY id
+        """)
         rows = [{"t": r["timestamp"], "b": round(r["balance"], 2)} for r in c.fetchall()]
         conn.close()
     except Exception:
