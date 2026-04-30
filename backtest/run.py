@@ -126,7 +126,7 @@ def run_historical_backtest(n_markets: int = 100) -> None:
 
     logger.info(f"Starting historical backtest on {n_markets} resolved markets")
 
-    markets = fetch_resolved_markets(limit=n_markets * 2)
+    markets = fetch_resolved_markets(limit=max(n_markets * 4, 400))
     if not markets:
         logger.error("No resolved markets returned. Check API connectivity.")
         return

@@ -404,8 +404,11 @@ def confirm_high_edge_signals(
                 signal.confidence = new_conf
                 signal.reasoning  = new_reason
                 new_edge = new_prob - signal.market_yes_price
-                signal.edge = new_edge
+                signal.edge      = new_edge
                 signal.direction = "YES" if new_edge >= 0 else "NO"
+                # Re-evaluate should_trade if confidence was downgraded to low
+                if new_conf == "low":
+                    signal.should_trade = False
 
             signal.confirmed_by_thinking = True
 
