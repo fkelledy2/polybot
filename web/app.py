@@ -227,6 +227,13 @@ def api_pnl_history():
         c = db.get_cursor(conn)
         # Calculate 30 days ago (works with both SQLite and Postgres)
         thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+
+        # First, check what dates are in the table
+        c.execute("SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest FROM balance_log")
+        date_range = c.fetchone()
+        print(f"[PNL-HISTORY] Database date range: {date_range['oldest']} → {date_range['newest']}")
+        print(f"[PNL-HISTORY] Querying for dates >= {thirty_days_ago}")
+
         # Fetch balance history from the last 30 days
         c.execute("""
             SELECT timestamp, balance FROM balance_log
@@ -234,9 +241,12 @@ def api_pnl_history():
             ORDER BY id
         """, (thirty_days_ago,))
         rows = [{"t": r["timestamp"], "b": round(r["balance"], 2)} for r in c.fetchall()]
+        print(f"[PNL-HISTORY] Returned {len(rows)} rows")
+        if rows:
+            print(f"[PNL-HISTORY] Data range: {rows[0]['t']} → {rows[-1]['t']}")
         conn.close()
     except Exception as e:
-        print(f"Error fetching pnl-history: {e}")
+        print(f"[PNL-HISTORY] Error: {e}")
         rows = []
     return jsonify(rows)
 
@@ -268,16 +278,27 @@ def log_stream():
 @app.route("/api/trade-timeline")
 def api_trade_timeline():
     try:
+        from datetime import datetime, timedelta
         conn = _db()
-        c = conn.cursor()
+        c = db.get_cursor(conn)
+        c.execute("""
+            SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest FROM trades
+        """)
+        date_range = c.fetchone()
+        print(f"[TRADE-TIMELINE] Database date range: {date_range['oldest']} → {date_range['newest']}")
+        print(f"[TRADE-TIMELINE] Total trades in database")
+
+        # Fetch all trades (or recent trades if needed)
         c.execute("""
             SELECT id, question, direction, entry_price, size_usd,
                    timestamp, closed_at, status, pnl
             FROM trades ORDER BY timestamp ASC
         """)
         rows = [dict(r) for r in c.fetchall()]
+        print(f"[TRADE-TIMELINE] Returned {len(rows)} rows")
         conn.close()
-    except Exception:
+    except Exception as e:
+        print(f"[TRADE-TIMELINE] Error: {e}")
         rows = []
     return jsonify(rows)
 
