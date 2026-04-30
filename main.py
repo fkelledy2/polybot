@@ -99,8 +99,8 @@ def main():
 
         # ── 1. Fetch markets ──────────────────────────────────
         markets_raw = polymarket.get_high_volume_markets(
-            min_volume=10_000,
-            limit=50,
+            min_volume=5_000,
+            limit=100,
             max_days=MAX_DAYS_TO_RESOLVE,
             min_days=MIN_DAYS_TO_RESOLVE,
         )

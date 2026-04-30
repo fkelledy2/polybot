@@ -29,7 +29,7 @@ STARTING_BALANCE = 600.0      # USD — matches the article's starting amount
 # Claude will only suggest a trade if the "edge" is big enough.
 # Edge = (Claude's confidence) minus (market's implied probability)
 # Example: Claude thinks 70% chance, market prices it at 52% → edge = 18%
-MIN_EDGE_TO_TRADE = 0.12      # 12% minimum edge before placing a trade
+MIN_EDGE_TO_TRADE = 0.10      # 10% minimum edge before placing a trade
 
 # ── Risk Management ───────────────────────────────────────────
 MAX_POSITION_PCT  = 0.05      # Never risk more than 5% of bankroll on one trade
@@ -48,7 +48,7 @@ MIN_TRADES_FOR_TRUST = 50
 # Only trade markets that resolve within this many days.
 # Short-resolution markets give faster feedback and don't lock
 # up capital for months. Set to None to disable the filter.
-MAX_DAYS_TO_RESOLVE = 14      # Skip markets resolving > 30 days away
+MAX_DAYS_TO_RESOLVE = 30      # Skip markets resolving > 30 days away
 MIN_DAYS_TO_RESOLVE = 1       # Skip markets resolving < 1 day away (too late)
 
 # ── Scheduling ────────────────────────────────────────────────

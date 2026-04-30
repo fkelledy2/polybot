@@ -15,6 +15,8 @@ from config import STARTING_BALANCE, MAX_POSITION_PCT, MAX_OPEN_POSITIONS
 KELLY_FRACTION = 0.5
 KELLY_MAX_PCT  = MAX_POSITION_PCT
 
+_CONFIDENCE_MULTIPLIER = {"high": 1.0, "medium": 0.75, "low": 0.5}
+
 logger = logging.getLogger(__name__)
 
 _ph = db.placeholder
@@ -135,21 +137,23 @@ class PaperTrader:
         open_cost = sum(t.size_usd for t in self.open_positions.values())
         return self.balance + open_cost
 
-    def _position_size(self, win_prob: float = None, entry_price: float = None) -> float:
+    def _position_size(self, win_prob: float = None, entry_price: float = None,
+                       confidence: str = "medium") -> float:
+        conf_mult = _CONFIDENCE_MULTIPLIER.get(confidence, 0.75)
         if win_prob is not None and entry_price is not None and entry_price > 0:
             b = (1.0 / entry_price) - 1.0
             if b > 0:
                 kelly_full = (win_prob * (b + 1) - 1) / b
-                kelly_half = kelly_full * KELLY_FRACTION
+                kelly_half = kelly_full * KELLY_FRACTION * conf_mult
                 fraction = max(0.0, min(kelly_half, KELLY_MAX_PCT))
                 size = round(self.balance * fraction, 2)
                 if size > 0:
                     logger.debug(
                         f"Kelly: p={win_prob:.2%} e={entry_price:.2%} "
-                        f"b={b:.2f} → half={kelly_half:.3f} → ${size:.2f}"
+                        f"b={b:.2f} conf={confidence}({conf_mult}x) → ${size:.2f}"
                     )
                     return size
-        return round(self.balance * MAX_POSITION_PCT, 2)
+        return round(self.balance * MAX_POSITION_PCT * conf_mult, 2)
 
     def place_trade(self, signal) -> Optional[Trade]:
         if signal.market_id in self.open_positions:
@@ -166,7 +170,10 @@ class PaperTrader:
             entry_price = 1 - signal.market_yes_price
             win_prob    = 1 - signal.claude_yes_probability
 
-        size_usd = self._position_size(win_prob=win_prob, entry_price=entry_price)
+        size_usd = self._position_size(
+            win_prob=win_prob, entry_price=entry_price,
+            confidence=getattr(signal, "confidence", "medium"),
+        )
 
         if size_usd > self.balance:
             logger.warning(f"Insufficient balance (${self.balance:.2f}) for ${size_usd:.2f}")
