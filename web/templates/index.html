@@ -627,50 +627,47 @@
   <div id="header-stats">
     <div class="hstat">
       <div class="hstat-label">NET P&amp;L</div>
-      <div class="hstat-value" id="h-pnl">—</div>
+      <div class="hstat-value" id="h-pnl" title="Total profit/loss from all closed trades">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">PORTFOLIO</div>
-      <div class="hstat-value neu" id="h-portfolio">—</div>
+      <div class="hstat-value neu" id="h-portfolio" title="Current portfolio value (balance + open positions)">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">OPEN</div>
-      <div class="hstat-value neu" id="h-open">0</div>
+      <div class="hstat-value neu" id="h-open" title="Number of currently open trades">0</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">WIN%</div>
-      <div class="hstat-value" id="h-win">—</div>
+      <div class="hstat-value" id="h-win" title="Percentage of closed trades that were profitable">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">W / L</div>
-      <div class="hstat-value neu" id="h-wl">—</div>
+      <div class="hstat-value neu" id="h-wl" title="Win/loss record (wins / losses from closed trades)">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">EDGES</div>
-      <div class="hstat-value" id="h-edges">0</div>
+      <div class="hstat-value" id="h-edges" title="Number of identified trading edges in current scan">0</div>
     </div>
     <div class="hstat">
-      <!-- "TRACKED" is more informative than "WALLETS" — makes 0 less ambiguous -->
       <div class="hstat-label">WALLETS</div>
-      <div class="hstat-value" id="h-wallets">0</div>
+      <div class="hstat-value" id="h-wallets" title="Elite wallets being tracked for copy-trading signals">0</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">SCAN #</div>
-      <div class="hstat-value" id="h-scan">—</div>
+      <div class="hstat-value" id="h-scan" title="Current market scan iteration number">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">API</div>
-      <div class="hstat-value neu" id="h-api" title="API connectivity status">✓ OK</div>
+      <div class="hstat-value neu" id="h-api" title="Polymarket API connectivity status">✓ OK</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">BALANCE</div>
-      <!-- No hardcoded $600 — show dash until first API response -->
-      <div class="hstat-value" id="h-balance">—</div>
+      <div class="hstat-value" id="h-balance" title="Current cash balance (excludes open position value)">—</div>
     </div>
     <div class="hstat">
-      <!-- Last scan timestamp — critical for judging data freshness -->
       <div class="hstat-label">LAST SCAN</div>
-      <div class="hstat-value" id="h-last-scan" style="font-size:11px;color:var(--muted)">—</div>
+      <div class="hstat-value" id="h-last-scan" style="font-size:11px;color:var(--muted)" title="Time elapsed since last market scan completed">—</div>
     </div>
   </div>
 
