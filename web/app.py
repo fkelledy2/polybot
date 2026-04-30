@@ -222,37 +222,14 @@ def api_positions():
 @app.route("/api/pnl-history")
 def api_pnl_history():
     try:
-        from datetime import datetime, timedelta
         conn = _db()
         c = db.get_cursor(conn)
-
-        # First, check what dates are in the table
-        c.execute("SELECT COUNT(*) as cnt, MIN(timestamp) as oldest, MAX(timestamp) as newest FROM balance_log")
-        date_range = c.fetchone()
-        total_rows = date_range['cnt']
-        oldest = date_range['oldest']
-        newest = date_range['newest']
-        print(f"[PNL-HISTORY] Table info: {total_rows} total rows, range: {oldest} → {newest}")
-
-        # Try fetching all data first to see what we have
+        # Fetch all balance history — chart will display all available data
+        # This gives a complete view of portfolio changes over time
         c.execute("SELECT timestamp, balance FROM balance_log ORDER BY id")
-        all_rows = c.fetchall()
-        print(f"[PNL-HISTORY] Fetched {len(all_rows)} rows without filter")
-
-        if all_rows:
-            # If we have any data, use it (no date filtering for now)
-            rows = [{"t": r["timestamp"], "b": round(r["balance"], 2)} for r in all_rows]
-            print(f"[PNL-HISTORY] Returning all {len(rows)} rows")
-            print(f"[PNL-HISTORY] Data range: {rows[0]['t']} → {rows[-1]['t']}")
-        else:
-            rows = []
-            print(f"[PNL-HISTORY] No data in balance_log table")
-
+        rows = [{"t": r["timestamp"], "b": round(r["balance"], 2)} for r in c.fetchall()]
         conn.close()
-    except Exception as e:
-        print(f"[PNL-HISTORY] Error: {e}")
-        import traceback
-        traceback.print_exc()
+    except Exception:
         rows = []
     return jsonify(rows)
 
@@ -284,27 +261,16 @@ def log_stream():
 @app.route("/api/trade-timeline")
 def api_trade_timeline():
     try:
-        from datetime import datetime, timedelta
         conn = _db()
         c = db.get_cursor(conn)
-        c.execute("""
-            SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest FROM trades
-        """)
-        date_range = c.fetchone()
-        print(f"[TRADE-TIMELINE] Database date range: {date_range['oldest']} → {date_range['newest']}")
-        print(f"[TRADE-TIMELINE] Total trades in database")
-
-        # Fetch all trades (or recent trades if needed)
         c.execute("""
             SELECT id, question, direction, entry_price, size_usd,
                    timestamp, closed_at, status, pnl
             FROM trades ORDER BY timestamp ASC
         """)
         rows = [dict(r) for r in c.fetchall()]
-        print(f"[TRADE-TIMELINE] Returned {len(rows)} rows")
         conn.close()
-    except Exception as e:
-        print(f"[TRADE-TIMELINE] Error: {e}")
+    except Exception:
         rows = []
     return jsonify(rows)
 
