@@ -374,7 +374,7 @@ def confirm_high_edge_signals(
                     "cache_control": {"type": "ephemeral"},
                 }],
                 tools=[_TOOL],
-                tool_choice={"type": "tool", "name": "submit_market_analysis"},
+                tool_choice={"type": "auto"},  # forced tool_choice conflicts with thinking
                 messages=[{"role": "user", "content": content}]
             )
 
