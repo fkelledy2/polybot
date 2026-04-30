@@ -225,28 +225,34 @@ def api_pnl_history():
         from datetime import datetime, timedelta
         conn = _db()
         c = db.get_cursor(conn)
-        # Calculate 30 days ago (works with both SQLite and Postgres)
-        thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
 
         # First, check what dates are in the table
-        c.execute("SELECT MIN(timestamp) as oldest, MAX(timestamp) as newest FROM balance_log")
+        c.execute("SELECT COUNT(*) as cnt, MIN(timestamp) as oldest, MAX(timestamp) as newest FROM balance_log")
         date_range = c.fetchone()
-        print(f"[PNL-HISTORY] Database date range: {date_range['oldest']} → {date_range['newest']}")
-        print(f"[PNL-HISTORY] Querying for dates >= {thirty_days_ago}")
+        total_rows = date_range['cnt']
+        oldest = date_range['oldest']
+        newest = date_range['newest']
+        print(f"[PNL-HISTORY] Table info: {total_rows} total rows, range: {oldest} → {newest}")
 
-        # Fetch balance history from the last 30 days
-        c.execute("""
-            SELECT timestamp, balance FROM balance_log
-            WHERE timestamp >= ?
-            ORDER BY id
-        """, (thirty_days_ago,))
-        rows = [{"t": r["timestamp"], "b": round(r["balance"], 2)} for r in c.fetchall()]
-        print(f"[PNL-HISTORY] Returned {len(rows)} rows")
-        if rows:
+        # Try fetching all data first to see what we have
+        c.execute("SELECT timestamp, balance FROM balance_log ORDER BY id")
+        all_rows = c.fetchall()
+        print(f"[PNL-HISTORY] Fetched {len(all_rows)} rows without filter")
+
+        if all_rows:
+            # If we have any data, use it (no date filtering for now)
+            rows = [{"t": r["timestamp"], "b": round(r["balance"], 2)} for r in all_rows]
+            print(f"[PNL-HISTORY] Returning all {len(rows)} rows")
             print(f"[PNL-HISTORY] Data range: {rows[0]['t']} → {rows[-1]['t']}")
+        else:
+            rows = []
+            print(f"[PNL-HISTORY] No data in balance_log table")
+
         conn.close()
     except Exception as e:
         print(f"[PNL-HISTORY] Error: {e}")
+        import traceback
+        traceback.print_exc()
         rows = []
     return jsonify(rows)
 
