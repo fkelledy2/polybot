@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>POLYBOT // TERMINAL</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%23000' width='32' height='32'/><text x='4' y='24' font-size='20' fill='%2300ff41' font-family='monospace' font-weight='bold'>◆</text></svg>">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
@@ -451,8 +452,8 @@
     #log-terminal {
       overflow-y: auto;
       flex: 1;
-      font-size: 10.5px;
-      line-height: 1.45;
+      font-size: 9px;
+      line-height: 1.4;
       color: var(--muted);
     }
     .log-line     { white-space: pre-wrap; word-break: break-all; }
@@ -735,6 +736,17 @@
     </div>
     <div id="trades-body">
       <div style="color:var(--muted);padding:20px 0;text-align:center">No trades yet</div>
+    </div>
+  </div>
+
+  <!-- PORTFOLIO CHART -->
+  <div class="panel">
+    <div class="panel-title">
+      <span class="slash">// </span>PORTFOLIO VALUE
+      <span style="margin-left:auto;font-size:9px;color:var(--muted)">Balance history</span>
+    </div>
+    <div id="portfolio-chart-wrap" style="position:relative;height:100%;min-height:200px">
+      <canvas id="portfolio-chart"></canvas>
     </div>
   </div>
 
@@ -1081,12 +1093,91 @@ async function refreshTrades() {
 // TRADE TIMELINE CHART
 // ══════════════════════════════════════════════════════════════
 let timelineChart = null;
+let portfolioChart = null;
 
 const TIMELINE_COLORS = {
   won:  { fill: 'rgba(0,255,65,0.85)',  border: '#00ff41' },
   lost: { fill: 'rgba(255,59,59,0.85)', border: '#ff3b3b' },
   open: { fill: 'rgba(240,192,64,0.85)',border: '#f0c040' },
 };
+
+function initPortfolioChart() {
+  const ctx = document.getElementById('portfolio-chart').getContext('2d');
+  portfolioChart = new Chart(ctx, {
+    type: 'line',
+    data: { datasets: [{
+      label: 'Portfolio Value',
+      data: [],
+      borderColor: '#00ff41',
+      backgroundColor: 'rgba(0,255,65,0.1)',
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      tension: 0.2,
+      fill: true,
+    }] },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#050f07',
+          borderColor: '#0d3320',
+          borderWidth: 1,
+          titleColor: '#4a7a5a',
+          bodyColor: '#c0ffd0',
+          padding: 10,
+          callbacks: {
+            title: items => new Date(items[0].raw.t).toLocaleString(),
+            label: item => '$' + parseFloat(item.raw.b).toFixed(2),
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: 'linear',
+          grid: { color: '#0a1f10', lineWidth: 0.5 },
+          ticks: {
+            color: '#4a7a5a',
+            font: { family: 'Courier New', size: 9 },
+            maxTicksLimit: 6,
+            callback: v => new Date(v).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }),
+          },
+          border: { display: false },
+        },
+        y: {
+          grid: { color: '#0a1f10', lineWidth: 0.5 },
+          ticks: {
+            color: '#4a7a5a',
+            font: { family: 'Courier New', size: 9 },
+            callback: v => '$' + v.toFixed(0),
+            maxTicksLimit: 6,
+          },
+          border: { display: false },
+          title: { display: true, text: 'BALANCE', color: '#4a7a5a', font: { size: 8 } },
+        },
+      },
+    },
+  });
+}
+
+async function refreshPortfolioChart() {
+  try {
+    const data = await fetch('/api/pnl-history').then(r => r.json());
+    if (!portfolioChart) return;
+
+    if (!data.length) {
+      portfolioChart.data.datasets[0].data = [];
+      portfolioChart.update('none');
+      return;
+    }
+
+    portfolioChart.data.datasets[0].data = data.map(d => ({t: new Date(d.t).getTime(), b: d.b}));
+    portfolioChart.update('none');
+  } catch(e) { console.warn('portfolio chart', e); }
+}
 
 function initChart() {
   const ctx = document.getElementById('timeline-chart').getContext('2d');
@@ -1280,6 +1371,7 @@ function startSSE() {
 // BOOT SEQUENCE
 // ══════════════════════════════════════════════════════════════
 initChart();
+initPortfolioChart();
 startSSE();
 
 // Initial data load
@@ -1288,13 +1380,15 @@ refreshSignals();
 refreshMarkets();
 refreshTrades();
 refreshChart();
+refreshPortfolioChart();
 
 // Polling intervals
-setInterval(refreshStats,   5000);
-setInterval(refreshSignals, SIGNAL_REFRESH_MS);
-setInterval(refreshMarkets, 8000);
-setInterval(refreshTrades,  10000);
-setInterval(refreshChart,   20000);
+setInterval(refreshStats,         5000);
+setInterval(refreshSignals,       SIGNAL_REFRESH_MS);
+setInterval(refreshMarkets,       8000);
+setInterval(refreshTrades,        10000);
+setInterval(refreshChart,         20000);
+setInterval(refreshPortfolioChart, 15000);
 
 // Update "N seconds ago" in last-scan without waiting for full stats refresh
 setInterval(() => {
