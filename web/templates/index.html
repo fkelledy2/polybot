@@ -1240,46 +1240,79 @@ function initPortfolioChart() {
 }
 
 async function refreshPortfolioChart() {
+  console.log('[PORTFOLIO] Starting refresh...');
   try {
     console.log('[PORTFOLIO] Fetching portfolio history...');
     const response = await fetch('/api/pnl-history');
+    console.log('[PORTFOLIO] Response:', { status: response.status, ok: response.ok });
+
     if (!response.ok) {
-      console.error('[PORTFOLIO] HTTP error:', response.status);
+      console.error('[PORTFOLIO] HTTP error:', response.status, response.statusText);
       return;
     }
+
     const data = await response.json();
-    const firstDateStr = data.length > 0 ? new Date(data[0]?.t).toLocaleDateString() : 'N/A';
-    const lastDateStr = data.length > 0 ? new Date(data[data.length - 1]?.t).toLocaleDateString() : 'N/A';
-    console.log('[PORTFOLIO] Data received:', { count: data.length, dateRange: `${firstDateStr} → ${lastDateStr}` });
-    if (data.length > 0) {
-      console.log('[PORTFOLIO] Raw first timestamp:', data[0].t, 'parsed:', new Date(data[0].t));
-      console.log('[PORTFOLIO] Raw last timestamp:', data[data.length - 1].t, 'parsed:', new Date(data[data.length - 1].t));
+    console.log('[PORTFOLIO] Raw data:', data);
+    console.log('[PORTFOLIO] Data is array?', Array.isArray(data), 'Length:', data?.length);
+
+    if (!Array.isArray(data)) {
+      console.error('[PORTFOLIO] Data is not an array!', typeof data);
+      return;
     }
 
-    if (!portfolioChart) return;
+    const firstDateStr = data.length > 0 ? new Date(data[0]?.t).toLocaleDateString() : 'N/A';
+    const lastDateStr = data.length > 0 ? new Date(data[data.length - 1]?.t).toLocaleDateString() : 'N/A';
+    console.log('[PORTFOLIO] Date range:', { firstDateStr, lastDateStr, count: data.length });
+
+    if (data.length > 0) {
+      console.log('[PORTFOLIO] Sample data:', {
+        first: { raw: data[0], parsed: new Date(data[0].t).toISOString() },
+        last: { raw: data[data.length - 1], parsed: new Date(data[data.length - 1].t).toISOString() }
+      });
+    }
+
+    if (!portfolioChart) {
+      console.error('[PORTFOLIO] Chart not initialized!');
+      return;
+    }
 
     if (!data.length) {
-      console.log('[PORTFOLIO] No history data');
+      console.log('[PORTFOLIO] No history data - clearing chart');
       portfolioChart.data.datasets[0].data = [];
       portfolioChart.update('none');
       return;
     }
 
-    portfolioChart.data.datasets[0].data = data.map(d => ({t: new Date(d.t).getTime(), b: d.b}));
+    const chartData = data.map(d => {
+      const timestamp = new Date(d.t).getTime();
+      console.log('[PORTFOLIO] Mapping:', { raw: d.t, timestamp, balance: d.b });
+      return { t: timestamp, b: d.b };
+    });
+
+    console.log('[PORTFOLIO] Chart data prepared, points:', chartData.length);
+    portfolioChart.data.datasets[0].data = chartData;
 
     // Display current value and date in the panel title
     const latestData = data[data.length - 1];
     const currentDate = new Date(latestData.t).toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' });
     const currentValue = fmt$(latestData.b);
     const portfolioCurrentEl = document.getElementById('portfolio-current');
+
+    console.log('[PORTFOLIO] Updating title - element found?', !!portfolioCurrentEl);
     if (portfolioCurrentEl) {
       portfolioCurrentEl.textContent = `${currentDate} • ${currentValue}`;
+      console.log('[PORTFOLIO] Title updated:', { date: currentDate, value: currentValue });
+    } else {
+      console.error('[PORTFOLIO] Element #portfolio-current not found!');
     }
 
-    console.log('[PORTFOLIO] Chart updated:', { date: currentDate, value: currentValue });
+    console.log('[PORTFOLIO] Calling chart.update()...');
     portfolioChart.update('none');
+    console.log('[PORTFOLIO] Chart updated successfully');
   } catch(e) {
     console.error('[PORTFOLIO] Error:', e.message);
+    console.error('[PORTFOLIO] Stack:', e.stack);
+    console.error('[PORTFOLIO] Full error:', e);
   }
 }
 
