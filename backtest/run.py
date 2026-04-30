@@ -11,7 +11,6 @@
 import argparse
 import json
 import logging
-import sqlite3
 import sys
 import os
 
@@ -24,85 +23,91 @@ logging.basicConfig(
 logger = logging.getLogger("backtest")
 
 
+_BACKTEST_SCHEMA = """
+CREATE TABLE IF NOT EXISTS backtest_runs (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_at               TEXT,
+    markets_n            INTEGER,
+    directional_accuracy REAL,
+    best_threshold       REAL,
+    best_ev              REAL,
+    summary_json         TEXT
+);
+CREATE TABLE IF NOT EXISTS backtest_markets (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id       INTEGER,
+    market_id    TEXT,
+    question     TEXT,
+    resolved_yes INTEGER,
+    claude_prob  REAL,
+    confidence   TEXT,
+    reasoning    TEXT
+)
+"""
+
+
+def _init_backtest_tables(conn, c) -> None:
+    import db
+    schema = db.adapt_schema(_BACKTEST_SCHEMA)
+    for stmt in schema.strip().split(";"):
+        stmt = stmt.strip()
+        if stmt:
+            c.execute(stmt)
+    conn.commit()
+
+
 def save_results_to_db(results, threshold_stats, confidence_stats, calibration):
-    """Persist backtest results to trades.db for the web UI."""
-    from config import TRADES_DB
-
-    conn = sqlite3.connect(TRADES_DB)
-    c = conn.cursor()
-
-    # Create backtest tables if needed
-    c.executescript("""
-        CREATE TABLE IF NOT EXISTS backtest_runs (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_at      TEXT,
-            markets_n   INTEGER,
-            directional_accuracy REAL,
-            best_threshold REAL,
-            best_ev    REAL,
-            summary_json TEXT
-        );
-        CREATE TABLE IF NOT EXISTS backtest_markets (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_id       INTEGER,
-            market_id    TEXT,
-            question     TEXT,
-            resolved_yes INTEGER,
-            claude_prob  REAL,
-            confidence   TEXT,
-            reasoning    TEXT
-        );
-    """)
-
+    """Persist backtest results via db.py (works with SQLite and Postgres)."""
+    import db
     from datetime import datetime
     from backtest.metrics import optimal_threshold
 
-    best_t = optimal_threshold(threshold_stats)
+    _ph = db.placeholder
+
+    best_t  = optimal_threshold(threshold_stats)
     best_ev = next((s.expected_value for s in threshold_stats if s.threshold == best_t), 0)
 
-    total = len(results)
-    correct_dir = sum(
-        1 for r in results
-        if (r.claude_probability >= 0.5) == r.resolved_yes
-    )
+    total       = len(results)
+    correct_dir = sum(1 for r in results if (r.claude_probability >= 0.5) == r.resolved_yes)
     dir_accuracy = correct_dir / total if total > 0 else 0
 
     summary = {
         "threshold_stats": [
-            {
-                "threshold": s.threshold,
-                "trades": s.trades,
-                "win_rate": s.win_rate,
-                "avg_pnl": s.avg_pnl,
-                "expected_value": s.expected_value,
-            }
+            {"threshold": s.threshold, "trades": s.trades, "win_rate": s.win_rate,
+             "avg_pnl": s.avg_pnl, "expected_value": s.expected_value}
             for s in threshold_stats
         ],
         "confidence_stats": confidence_stats,
         "calibration": calibration,
     }
 
-    c.execute("""
-        INSERT INTO backtest_runs
-        (run_at, markets_n, directional_accuracy, best_threshold, best_ev, summary_json)
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (
-        datetime.now().isoformat(),
-        total,
-        round(dir_accuracy, 4),
-        best_t,
-        round(best_ev, 4),
-        json.dumps(summary),
-    ))
-    run_id = c.lastrowid
+    conn = db.get_connection()
+    c    = db.get_cursor(conn)
+    _init_backtest_tables(conn, c)
+
+    insert_run = (
+        f"INSERT INTO backtest_runs "
+        f"(run_at, markets_n, directional_accuracy, best_threshold, best_ev, summary_json) "
+        f"VALUES ({_ph},{_ph},{_ph},{_ph},{_ph},{_ph})"
+    )
+    vals = (datetime.now().isoformat(), total, round(dir_accuracy, 4),
+            best_t, round(best_ev, 4), json.dumps(summary))
+
+    if db.IS_POSTGRES:
+        c.execute(insert_run + " RETURNING id", vals)
+        run_id = c.fetchone()["id"]
+    else:
+        c.execute(insert_run, vals)
+        run_id = c.lastrowid
 
     for r in results:
-        c.execute("""
-            INSERT INTO backtest_markets
-            (run_id, market_id, question, resolved_yes, claude_prob, confidence, reasoning)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (run_id, r.market_id, r.question, int(r.resolved_yes),
-              r.claude_probability, r.confidence, r.reasoning))
+        c.execute(
+            f"INSERT INTO backtest_markets "
+            f"(run_id, market_id, question, resolved_yes, claude_prob, confidence, reasoning) "
+            f"VALUES ({_ph},{_ph},{_ph},{_ph},{_ph},{_ph},{_ph})",
+            (run_id, r.market_id, r.question, int(r.resolved_yes),
+             r.claude_probability, r.confidence, r.reasoning),
+        )
 
     conn.commit()
     conn.close()
