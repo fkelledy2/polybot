@@ -17,6 +17,7 @@ from flask import Flask, Response, jsonify, render_template, request, session, r
 import db
 from config import STARTING_BALANCE
 from web.costs import get_all_costs_summary
+from notifications import alert_deployment
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-me-in-production")
@@ -360,6 +361,35 @@ def api_backtest_tracker():
 def api_costs():
     """Return SaaS service costs and usage."""
     return jsonify(get_all_costs_summary())
+
+
+@app.route("/webhooks/deploy", methods=["POST"])
+def webhook_deploy():
+    """Webhook endpoint for deployment notifications (GitHub/Heroku)."""
+    try:
+        data = request.get_json() or {}
+
+        # GitHub push event
+        if "repository" in data and "ref" in data:
+            commits = data.get("commits", [])
+            if commits:
+                latest = commits[-1]
+                commit_sha = latest.get("id", "unknown")
+                message = latest.get("message", "")
+                alert_deployment(commit_sha, message)
+
+        # Heroku release webhook
+        elif "release" in data:
+            release = data["release"]
+            alert_deployment(
+                release.get("commit", "unknown"),
+                release.get("description", "Heroku deployment")
+            )
+
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        logger.error(f"Webhook error: {e}")
+        return jsonify({"error": str(e)}), 400
 
 
 def run_server(host: str = "0.0.0.0", port: int = None) -> None:

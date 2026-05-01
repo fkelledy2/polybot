@@ -20,6 +20,14 @@ from signals.categorizer import get_category_context, CATEGORY_CONTEXT
 
 logger = logging.getLogger(__name__)
 
+# Import notification alerts (safe to fail if not configured)
+try:
+    from notifications import alert_api_credit_exhausted
+except ImportError:
+    def alert_api_credit_exhausted(service):
+        logger.warning(f"Notifications module not available: {service}")
+        return False
+
 client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 _CONFIRMATION_MODEL = "claude-sonnet-4-6"
@@ -328,6 +336,8 @@ def batch_analyse_markets(
                 "Anthropic API credit balance exhausted. "
                 "Top up at console.anthropic.com/settings/billing and restart."
             )
+            # Send email alert for credit exhaustion
+            alert_api_credit_exhausted("Anthropic")
         return [], []
     except anthropic.APIError as e:
         logger.error(f"Anthropic API error: {e}")
