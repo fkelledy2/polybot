@@ -30,6 +30,7 @@ STARTING_BALANCE = 600.0      # USD — matches the article's starting amount
 # Edge = (Claude's confidence) minus (market's implied probability)
 # Example: Claude thinks 70% chance, market prices it at 52% → edge = 18%
 MIN_EDGE_TO_TRADE = 0.10      # 10% minimum edge before placing a trade
+MIN_ENTRY_PROBABILITY = 0.03   # Never enter a trade at <3% probability (100:33 odds)
 
 # ── Risk Management ───────────────────────────────────────────
 MAX_POSITION_PCT  = 0.05      # Never risk more than 5% of bankroll on one trade

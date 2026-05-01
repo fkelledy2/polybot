@@ -12,7 +12,10 @@ import logging
 import anthropic
 from dataclasses import dataclass, field
 from typing import Optional
-from config import ANTHROPIC_API_KEY, MIN_EDGE_TO_TRADE, CLAUDE_MODEL
+from config import (
+    ANTHROPIC_API_KEY, MIN_EDGE_TO_TRADE, MIN_ENTRY_PROBABILITY,
+    MAX_DAYS_TO_RESOLVE, MIN_DAYS_TO_RESOLVE, CLAUDE_MODEL
+)
 from signals.categorizer import get_category_context, CATEGORY_CONTEXT
 
 logger = logging.getLogger(__name__)
@@ -146,9 +149,11 @@ def _build_signal(market: dict, result: dict, wallet_signals: list[dict],
         if edge >= 0:
             direction = "YES"
             abs_edge  = edge
+            entry_probability = yes_price
         else:
             direction = "NO"
             abs_edge  = abs(edge)
+            entry_probability = 1.0 - yes_price
 
         wallet_alignment = False
         if wallet_signals:
@@ -158,9 +163,13 @@ def _build_signal(market: dict, result: dict, wallet_signals: list[dict],
         # S3-2: lower threshold for newly listed markets
         effective_min = MIN_EDGE_TO_TRADE * 0.8 if market.get("is_new_market") else MIN_EDGE_TO_TRADE
 
-        should_trade = abs_edge >= effective_min and confidence != "low"
+        should_trade = (
+            abs_edge >= effective_min
+            and confidence != "low"
+            and entry_probability >= MIN_ENTRY_PROBABILITY
+        )
         if wallet_alignment and abs_edge >= MIN_EDGE_TO_TRADE * 0.8:
-            should_trade = True
+            should_trade = should_trade and entry_probability >= MIN_ENTRY_PROBABILITY
 
         return TradeSignal(
             market_id=market_id,
@@ -190,10 +199,19 @@ def batch_analyse_markets(
     Analyse multiple markets in a single Claude API call.
     Returns (all_signals, tradeable_signals).
     """
-    markets_to_check = [
-        m for m in markets[:max_markets]
-        if m.get("market_id") and m.get("question") and m.get("yes") is not None
-    ]
+    markets_to_check = []
+    for m in markets[:max_markets]:
+        if not (m.get("market_id") and m.get("question") and m.get("yes") is not None):
+            continue
+
+        days_to_resolve = m.get("days_to_resolve")
+        if days_to_resolve is not None:
+            if MAX_DAYS_TO_RESOLVE and days_to_resolve > MAX_DAYS_TO_RESOLVE:
+                continue
+            if MIN_DAYS_TO_RESOLVE and days_to_resolve < MIN_DAYS_TO_RESOLVE:
+                continue
+
+        markets_to_check.append(m)
 
     if not markets_to_check:
         logger.info("No valid markets to analyse")
