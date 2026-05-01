@@ -135,10 +135,22 @@ def estimate_weekly_costs() -> dict:
         "total": 0.0,
     }
 
-    # Anthropic
-    anthropic_costs = calculate_anthropic_costs(week_ago)
-    costs["services"]["anthropic"] = anthropic_costs
-    costs["total"] += anthropic_costs["cost"]
+    # Anthropic - enabled service
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        anthropic_costs = calculate_anthropic_costs(week_ago)
+        # Ensure minimum baseline if service is enabled
+        if anthropic_costs["cost"] < 0.20:
+            anthropic_costs["cost"] = round(0.20, 4)  # Minimum $0.20/week
+        costs["services"]["anthropic"] = anthropic_costs
+        costs["total"] += anthropic_costs["cost"]
+
+    # Brave Search - optional service
+    if os.environ.get("BRAVE_SEARCH_API_KEY"):
+        costs["services"]["brave_search"] = {
+            "service": "brave_search",
+            "cost": round(0.10, 4),  # Baseline estimate if enabled
+        }
+        costs["total"] += costs["services"]["brave_search"]["cost"]
 
     # Heroku (prorated: $7/month ≈ $1.62/week)
     costs["services"]["heroku"] = {
@@ -163,10 +175,22 @@ def estimate_monthly_costs() -> dict:
         "total": 0.0,
     }
 
-    # Anthropic
-    anthropic_costs = calculate_anthropic_costs(month_ago)
-    costs["services"]["anthropic"] = anthropic_costs
-    costs["total"] += anthropic_costs["cost"]
+    # Anthropic - enabled service
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        anthropic_costs = calculate_anthropic_costs(month_ago)
+        # Ensure minimum baseline if service is enabled
+        if anthropic_costs["cost"] < 1.0:
+            anthropic_costs["cost"] = round(1.0, 4)  # Minimum $1.00/month
+        costs["services"]["anthropic"] = anthropic_costs
+        costs["total"] += anthropic_costs["cost"]
+
+    # Brave Search - optional service
+    if os.environ.get("BRAVE_SEARCH_API_KEY"):
+        costs["services"]["brave_search"] = {
+            "service": "brave_search",
+            "cost": round(1.00, 4),  # Baseline estimate if enabled
+        }
+        costs["total"] += costs["services"]["brave_search"]["cost"]
 
     # Heroku
     costs["services"]["heroku"] = {
