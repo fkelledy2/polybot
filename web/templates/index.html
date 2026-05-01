@@ -585,6 +585,59 @@
       /* Hide size and status columns on very narrow screens */
       .t-size, .t-status { display: none; }
     }
+
+    /* ══════════════════════════════════════════
+       TOOLTIPS - Styled hover descriptions
+       ══════════════════════════════════════════ */
+    .hstat-tooltip {
+      position: relative;
+      cursor: help;
+    }
+
+    .hstat-tooltip::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      bottom: 120%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface2);
+      color: var(--green);
+      border: 1px solid var(--muted);
+      padding: 8px 12px;
+      border-radius: 3px;
+      font-size: 10px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+      line-height: 1.4;
+      max-width: 180px;
+      white-space: normal;
+    }
+
+    .hstat-tooltip::before {
+      content: '';
+      position: absolute;
+      bottom: 115%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 5px solid transparent;
+      border-top-color: var(--muted);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+      z-index: 1000;
+      pointer-events: none;
+    }
+
+    .hstat-tooltip:hover::after,
+    .hstat-tooltip:hover::before {
+      opacity: 1;
+      visibility: visible;
+    }
   </style>
 </head>
 
@@ -629,47 +682,47 @@
   <div id="header-stats">
     <div class="hstat">
       <div class="hstat-label">NET P&amp;L</div>
-      <div class="hstat-value" id="h-pnl" title="Total profit/loss from all closed trades">—</div>
+      <div class="hstat-value hstat-tooltip" id="h-pnl" data-tooltip="Total profit/loss from all closed trades. Positive = profitable, negative = losing">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">PORTFOLIO</div>
-      <div class="hstat-value neu" id="h-portfolio" title="Current portfolio value (balance + open positions)">—</div>
+      <div class="hstat-value neu hstat-tooltip" id="h-portfolio" data-tooltip="Total portfolio value: available cash + open position value. Your net worth.">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">OPEN</div>
-      <div class="hstat-value neu" id="h-open" title="Number of currently open trades">0</div>
+      <div class="hstat-value neu hstat-tooltip" id="h-open" data-tooltip="Number of active trades waiting for market resolution. Max 10 per config.">0</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">WIN%</div>
-      <div class="hstat-value" id="h-win" title="Percentage of closed trades that were profitable">—</div>
+      <div class="hstat-value hstat-tooltip" id="h-win" data-tooltip="Win rate: percentage of closed trades that made profit. 50%+ is good.">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">W / L</div>
-      <div class="hstat-value neu" id="h-wl" title="Win/loss record (wins / losses from closed trades)">—</div>
+      <div class="hstat-value neu hstat-tooltip" id="h-wl" data-tooltip="Win/loss tally: X wins out of Y total closed trades. Shows track record.">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">EDGES</div>
-      <div class="hstat-value" id="h-edges" title="Number of identified trading edges in current scan">0</div>
+      <div class="hstat-value hstat-tooltip" id="h-edges" data-tooltip="Markets with sufficient edge identified in current scan. Edge = Claude prob minus market price.">0</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">WALLETS</div>
-      <div class="hstat-value" id="h-wallets" title="Elite wallets being tracked for copy-trading signals">0</div>
+      <div class="hstat-value neu hstat-tooltip" id="h-wallets" data-tooltip="Elite wallets tracked for copy-trading signals. Disabled: wallet API unavailable.">0</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">SCAN #</div>
-      <div class="hstat-value" id="h-scan" title="Current market scan iteration number">—</div>
+      <div class="hstat-value hstat-tooltip" id="h-scan" data-tooltip="Market scan iteration count. Incremented each scan cycle (every 60 seconds).">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">API</div>
-      <div class="hstat-value neu" id="h-api" title="Polymarket API connectivity status">✓ OK</div>
+      <div class="hstat-value neu hstat-tooltip" id="h-api" data-tooltip="Polymarket API health status. ✓ OK = connected. ✗ = connection failed.">✓ OK</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">BALANCE</div>
-      <div class="hstat-value" id="h-balance" title="Current cash balance (excludes open position value)">—</div>
+      <div class="hstat-value hstat-tooltip" id="h-balance" data-tooltip="Available cash on hand. Excludes capital locked in open positions.">—</div>
     </div>
     <div class="hstat">
       <div class="hstat-label">LAST SCAN</div>
-      <div class="hstat-value" id="h-last-scan" style="font-size:11px;color:var(--muted)" title="Time elapsed since last market scan completed">—</div>
+      <div class="hstat-value hstat-tooltip" id="h-last-scan" style="font-size:11px;color:var(--muted)" data-tooltip="Time since last market scan completed. Scans run every 60 seconds. Watch this for bot activity.">—</div>
     </div>
   </div>
 
