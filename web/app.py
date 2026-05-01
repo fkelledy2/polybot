@@ -10,14 +10,30 @@ import os
 import threading
 import time
 from collections import deque
+from functools import wraps
 
-from flask import Flask, Response, jsonify, render_template
+from flask import Flask, Response, jsonify, render_template, request, session, redirect, url_for
 
 import db
 from config import STARTING_BALANCE
+from web.costs import get_all_costs_summary
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "change-me-in-production")
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
+
+# ── Authentication ────────────────────────────────────────────
+DASHBOARD_USERNAME = os.environ.get("DASHBOARD_USERNAME", "admin")
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "change-me-in-production")
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "authenticated" not in session:
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # ── Shared state (updated each scan by main.py) ───────────────
 shared_state: dict = {
@@ -157,17 +173,38 @@ def _get_stats() -> dict:
 
 # ── Routes ────────────────────────────────────────────────────
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        if username == DASHBOARD_USERNAME and password == DASHBOARD_PASSWORD:
+            session["authenticated"] = True
+            return redirect(url_for("index"))
+        return render_template("login.html", error="Invalid credentials")
+    return render_template("login.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/")
+@login_required
 def index():
     return render_template("index.html")
 
 
 @app.route("/api/stats")
+@login_required
 def api_stats():
     return jsonify(_get_stats())
 
 
 @app.route("/api/signals")
+@login_required
 def api_signals():
     with _state_lock:
         data = recent_signals[:]
@@ -177,6 +214,7 @@ def api_signals():
 
 
 @app.route("/api/markets")
+@login_required
 def api_markets():
     with _state_lock:
         data = recent_markets[:]
@@ -184,6 +222,7 @@ def api_markets():
 
 
 @app.route("/api/trades")
+@login_required
 def api_trades():
     try:
         conn = _db()
@@ -202,6 +241,7 @@ def api_trades():
 
 
 @app.route("/api/positions")
+@login_required
 def api_positions():
     try:
         conn = _db()
@@ -220,6 +260,7 @@ def api_positions():
 
 
 @app.route("/api/pnl-history")
+@login_required
 def api_pnl_history():
     try:
         conn = _db()
@@ -235,6 +276,7 @@ def api_pnl_history():
 
 
 @app.route("/api/logs/stream")
+@login_required
 def log_stream():
     def generate():
         with _log_lock:
@@ -259,6 +301,7 @@ def log_stream():
 
 
 @app.route("/api/trade-timeline")
+@login_required
 def api_trade_timeline():
     try:
         conn = _db()
@@ -276,6 +319,7 @@ def api_trade_timeline():
 
 
 @app.route("/api/backtest/latest")
+@login_required
 def api_backtest_latest():
     """Return the most recent historical backtest run."""
     try:
@@ -298,6 +342,7 @@ def api_backtest_latest():
 
 
 @app.route("/api/backtest/tracker")
+@login_required
 def api_backtest_tracker():
     """Return forward-tracker stats and recent predictions."""
     try:
@@ -308,6 +353,13 @@ def api_backtest_tracker():
         })
     except Exception as e:
         return jsonify({"error": str(e)})
+
+
+@app.route("/api/costs")
+@login_required
+def api_costs():
+    """Return SaaS service costs and usage."""
+    return jsonify(get_all_costs_summary())
 
 
 def run_server(host: str = "0.0.0.0", port: int = None) -> None:
