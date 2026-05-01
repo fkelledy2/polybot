@@ -75,9 +75,10 @@ check_heroku_cli() {
 
 # Check if app exists
 check_app_exists() {
-    if ! heroku apps --json 2>/dev/null | grep -q "\"name\":\"${APP_NAME}\""; then
+    if ! heroku apps 2>/dev/null | grep -q "${APP_NAME}"; then
         echo -e "${RED}Error: App '${APP_NAME}' not found${NC}"
-        echo "Make sure you're authenticated: heroku auth:login"
+        echo "Available apps:"
+        heroku apps 2>/dev/null || echo "  (run 'heroku auth:login' first)"
         exit 1
     fi
 }
