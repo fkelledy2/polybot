@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="POLYBOT//M">
+    <meta name="theme-color" content="#000000">
+    <title>POLYBOT//M</title>
+    <style>
+        /* ─────────────────────────────────────────────────────────────
+           DESIGN TOKENS (Terminal Aesthetic)
+           ───────────────────────────────────────────────────────────── */
+        :root {
+            --bg: #000000;
+            --surface: #050f07;
+            --surface-alt: #0a1a0d;
+            --green: #00ff41;
+            --red: #ff3b3b;
+            --amber: #f0c040;
+            --text-primary: #00ff41;
+            --text-secondary: #888888;
+            --border: #1a3a1d;
+            --safe-top: env(safe-area-inset-top, 0);
+            --safe-bottom: env(safe-area-inset-bottom, 0);
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           GLOBAL STYLES
+           ───────────────────────────────────────────────────────────── */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            font-family: "Courier New", monospace;
+            font-size: 13px;
+            background-color: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.5;
+            overflow-x: hidden;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            padding-top: var(--safe-top);
+            padding-bottom: var(--safe-bottom);
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           HEADER (Sticky)
+           ───────────────────────────────────────────────────────────── */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background-color: var(--bg);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 14px;
+            padding-top: calc(12px + var(--safe-top));
+            display: grid;
+            grid-template-columns: auto 1fr auto auto auto auto;
+            gap: 12px;
+            align-items: center;
+            min-height: 44px;
+        }
+
+        .header__logo {
+            font-weight: bold;
+            font-size: 12px;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .header__stat {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+
+        .header__stat-label {
+            font-size: 10px;
+            color: var(--text-secondary);
+            letter-spacing: 0.5px;
+        }
+
+        .header__stat-value {
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .header__stat-value.positive {
+            color: var(--green);
+        }
+
+        .header__stat-value.negative {
+            color: var(--red);
+        }
+
+        .header__stat-value.warning {
+            color: var(--amber);
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           MAIN CONTENT
+           ───────────────────────────────────────────────────────────── */
+        .main {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .section {
+            border-bottom: 1px solid var(--border);
+            padding: 14px;
+            min-height: 120px;
+        }
+
+        .section__header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .section__count {
+            color: var(--green);
+            font-weight: bold;
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           SIGNALS SECTION (Horizontal Scroll)
+           ───────────────────────────────────────────────────────────── */
+        .signals__container {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x mandatory;
+            margin: 0 -14px;
+            padding: 0 14px;
+            scroll-padding-left: 14px;
+        }
+
+        .signal-card {
+            flex: 0 0 280px;
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            padding: 12px;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-height: 160px;
+        }
+
+        .signal-card__direction {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+        }
+
+        .signal-card__direction.yes {
+            color: var(--green);
+        }
+
+        .signal-card__direction.no {
+            color: var(--red);
+        }
+
+        .signal-card__edge {
+            font-size: 12px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .signal-card__question {
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            flex: 1;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+        }
+
+        .signal-card__meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border);
+            padding-top: 8px;
+        }
+
+        .signal-card__confidence {
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           POSITIONS SECTION
+           ───────────────────────────────────────────────────────────── */
+        .positions__list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .position-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        .position-row__question {
+            flex: 1;
+            font-size: 12px;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .position-row__amount {
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-primary);
+            white-space: nowrap;
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           TRADES SECTION
+           ───────────────────────────────────────────────────────────── */
+        .trades__list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .trade-row {
+            display: grid;
+            grid-template-columns: 1fr 60px 80px;
+            gap: 8px;
+            padding: 10px;
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            align-items: center;
+            min-height: 44px;
+        }
+
+        .trade-row__question {
+            font-size: 11px;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .trade-row__direction {
+            text-align: center;
+            font-size: 11px;
+            font-weight: bold;
+            color: var(--text-secondary);
+        }
+
+        .trade-row__pnl {
+            text-align: right;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+            font-size: 12px;
+        }
+
+        .trade-row__pnl.won {
+            color: var(--green);
+        }
+
+        .trade-row__pnl.lost {
+            color: var(--red);
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           BUILD LOG SECTION
+           ───────────────────────────────────────────────────────────── */
+        .buildlog__list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .buildlog-item {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            padding: 10px;
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 2px;
+            min-height: 44px;
+            font-size: 12px;
+        }
+
+        .buildlog-item__icon {
+            flex: 0 0 20px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .buildlog-item__text {
+            flex: 1;
+            color: var(--text-secondary);
+            overflow-wrap: break-word;
+        }
+
+        .buildlog-item.done .buildlog-item__icon {
+            color: var(--green);
+        }
+
+        .buildlog-item.pending .buildlog-item__icon {
+            color: var(--amber);
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           FOOTER
+           ───────────────────────────────────────────────────────────── */
+        .footer {
+            border-top: 1px solid var(--border);
+            padding: 14px;
+            padding-bottom: calc(14px + var(--safe-bottom));
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 2px;
+            font-family: "Courier New", monospace;
+            font-size: 12px;
+            cursor: pointer;
+            min-height: 44px;
+            min-width: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            transition: all 0.15s ease;
+            font-weight: bold;
+        }
+
+        .btn:active {
+            background-color: var(--surface-alt);
+            border-color: var(--green);
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           STATES
+           ───────────────────────────────────────────────────────────── */
+        .loading {
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .error {
+            color: var(--red);
+        }
+
+        .empty {
+            color: var(--text-secondary);
+            padding: 20px 0;
+            text-align: center;
+            font-style: italic;
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           ANIMATIONS
+           ───────────────────────────────────────────────────────────── */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .pulse {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        /* ─────────────────────────────────────────────────────────────
+           SCROLLBAR (iOS)
+           ───────────────────────────────────────────────────────────── */
+        .main::-webkit-scrollbar,
+        .signals__container::-webkit-scrollbar {
+            height: 3px;
+            width: 3px;
+        }
+
+        .main::-webkit-scrollbar-thumb,
+        .signals__container::-webkit-scrollbar-thumb {
+            background-color: var(--green);
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <div class="header">
+        <div class="header__logo">POLYBOT//M</div>
+        <div class="header__stat">
+            <div class="header__stat-label">P&L</div>
+            <div class="header__stat-value" id="header-pnl">—</div>
+        </div>
+        <div class="header__stat">
+            <div class="header__stat-label">WIN%</div>
+            <div class="header__stat-value" id="header-winrate">—</div>
+        </div>
+        <div class="header__stat">
+            <div class="header__stat-label">PORT</div>
+            <div class="header__stat-value" id="header-portfolio">—</div>
+        </div>
+        <div class="header__stat">
+            <div class="header__stat-label">STATUS</div>
+            <div class="header__stat-value" id="header-status">—</div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main">
+        <!-- SIGNALS SECTION -->
+        <div class="section">
+            <div class="section__header">
+                // SIGNALS
+                <span class="section__count" id="signals-count">[0]</span>
+            </div>
+            <div class="signals__container" id="signals-container">
+                <div class="loading">loading...</div>
+            </div>
+        </div>
+
+        <!-- POSITIONS SECTION -->
+        <div class="section">
+            <div class="section__header">
+                // POSITIONS
+                <span class="section__count" id="positions-count">[0]</span>
+            </div>
+            <div class="positions__list" id="positions-list">
+                <div class="loading">loading...</div>
+            </div>
+        </div>
+
+        <!-- TRADES SECTION -->
+        <div class="section">
+            <div class="section__header">
+                // TRADES
+                <span class="section__count" id="trades-count">[0]</span>
+            </div>
+            <div class="trades__list" id="trades-list">
+                <div class="loading">loading...</div>
+            </div>
+        </div>
+
+        <!-- BUILD LOG SECTION -->
+        <div class="section">
+            <div class="section__header">
+                // BUILD LOG
+            </div>
+            <div class="buildlog__list" id="buildlog-list">
+                <div class="loading">loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        <a href="/" class="btn">DESKTOP VIEW</a>
+        <a href="/logout" class="btn">LOGOUT</a>
+    </div>
+
+    <script>
+        // ─────────────────────────────────────────────────────────────
+        // STATE & CONFIG
+        // ─────────────────────────────────────────────────────────────
+        const state = {
+            stats: {},
+            signals: [],
+            positions: [],
+            trades: [],
+            buildlog: {},
+        };
+
+        const pollIntervals = {
+            stats: 15000,      // 15s
+            signals: 20000,    // 20s
+            positions: 20000,  // 20s
+            trades: 30000,     // 30s
+            buildlog: 60000,   // 60s
+        };
+
+        // ─────────────────────────────────────────────────────────────
+        // FETCH & RENDER
+        // ─────────────────────────────────────────────────────────────
+
+        async function fetchStats() {
+            try {
+                const res = await fetch('/api/stats');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                state.stats = await res.json();
+                renderHeader();
+            } catch (e) {
+                console.error('fetchStats error:', e);
+            }
+        }
+
+        async function fetchSignals() {
+            try {
+                const res = await fetch('/api/signals');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const all = await res.json();
+                // Take top 3 by absolute edge
+                state.signals = all.slice(0, 3);
+                renderSignals();
+            } catch (e) {
+                console.error('fetchSignals error:', e);
+            }
+        }
+
+        async function fetchPositions() {
+            try {
+                const res = await fetch('/api/positions');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                state.positions = await res.json();
+                renderPositions();
+            } catch (e) {
+                console.error('fetchPositions error:', e);
+            }
+        }
+
+        async function fetchTrades() {
+            try {
+                const res = await fetch('/api/trades');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const all = await res.json();
+                // Take last 5 trades
+                state.trades = all.slice(0, 5);
+                renderTrades();
+            } catch (e) {
+                console.error('fetchTrades error:', e);
+            }
+        }
+
+        async function fetchBuildLog() {
+            try {
+                const res = await fetch('/.claude/analysis_report.json');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                state.buildlog = await res.json();
+                renderBuildLog();
+            } catch (e) {
+                console.error('fetchBuildLog error:', e);
+                // 404 is OK, just means no report yet
+            }
+        }
+
+        function renderHeader() {
+            const s = state.stats;
+
+            // PnL
+            const pnl = s.total_pnl || 0;
+            const pnlEl = document.getElementById('header-pnl');
+            pnlEl.textContent = `$${pnl.toFixed(0)}`;
+            pnlEl.className = 'header__stat-value';
+            if (pnl > 0) pnlEl.classList.add('positive');
+            else if (pnl < 0) pnlEl.classList.add('negative');
+
+            // Win rate
+            const wr = (s.win_rate || 0) * 100;
+            document.getElementById('header-winrate').textContent = `${wr.toFixed(0)}%`;
+
+            // Portfolio
+            const port = s.portfolio_value || s.balance || 0;
+            document.getElementById('header-portfolio').textContent = `$${port.toFixed(0)}`;
+
+            // Status: infer from win rate
+            const statusEl = document.getElementById('header-status');
+            statusEl.className = 'header__stat-value';
+            if (s.total_trades < 3) {
+                statusEl.textContent = 'NEW';
+                statusEl.classList.add('warning');
+            } else if (wr < 33) {
+                statusEl.textContent = 'CRIT';
+                statusEl.classList.add('negative');
+            } else if (wr < 45) {
+                statusEl.textContent = 'POOR';
+                statusEl.classList.add('negative');
+            } else if (wr < 55) {
+                statusEl.textContent = 'WEAK';
+                statusEl.classList.add('warning');
+            } else {
+                statusEl.textContent = 'OK';
+                statusEl.classList.add('positive');
+            }
+        }
+
+        function renderSignals() {
+            const container = document.getElementById('signals-container');
+            const count = document.getElementById('signals-count');
+
+            count.textContent = `[${state.signals.length}]`;
+
+            if (state.signals.length === 0) {
+                container.innerHTML = '<div class="empty">no signals</div>';
+                return;
+            }
+
+            container.innerHTML = state.signals.map(s => {
+                const direction = s.direction === 'YES' ? 'YES' : 'NO';
+                const dirClass = direction === 'YES' ? 'yes' : 'no';
+                const edge = (s.edge * 100).toFixed(1);
+                const conf = (s.confidence * 100).toFixed(0);
+                const vol = s.volume_usd ? `$${Math.round(s.volume_usd / 1000)}k` : '—';
+
+                return `
+                    <div class="signal-card">
+                        <div class="signal-card__direction ${dirClass}">
+                            <span>${direction}</span>
+                            <span class="signal-card__edge">${edge > 0 ? '+' : ''}${edge}%</span>
+                        </div>
+                        <div class="signal-card__question">${s.question || '(no question)'}</div>
+                        <div class="signal-card__meta">
+                            <span>price ${(s.market_yes_price * 100).toFixed(0)}%</span>
+                            <span>vol ${vol}</span>
+                        </div>
+                        <div class="signal-card__meta">
+                            <span>conf <span class="signal-card__confidence">${conf}%</span></span>
+                            <span>${s.days_to_resolve || '—'} days</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderPositions() {
+            const list = document.getElementById('positions-list');
+            const count = document.getElementById('positions-count');
+
+            count.textContent = `[${state.positions.length}]`;
+
+            if (state.positions.length === 0) {
+                list.innerHTML = '<div class="empty">no open positions</div>';
+                return;
+            }
+
+            list.innerHTML = state.positions.map(p => {
+                const dir = p.direction === 'YES' ? 'YES' : 'NO';
+                const amount = `$${(p.size_usd || 0).toFixed(0)}`;
+
+                return `
+                    <div class="position-row">
+                        <div class="position-row__question">${p.question || '(no question)'}</div>
+                        <div class="position-row__amount">${amount}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderTrades() {
+            const list = document.getElementById('trades-list');
+            const count = document.getElementById('trades-count');
+
+            count.textContent = `[${state.trades.length}]`;
+
+            if (state.trades.length === 0) {
+                list.innerHTML = '<div class="empty">no trades</div>';
+                return;
+            }
+
+            list.innerHTML = state.trades.map(t => {
+                const dir = t.direction === 'YES' ? 'Y' : 'N';
+                const pnl = t.pnl || 0;
+                const pnlClass = pnl > 0 ? 'won' : 'lost';
+                const pnlText = pnl > 0 ? '+' : '';
+
+                return `
+                    <div class="trade-row">
+                        <div class="trade-row__question">${t.question || '(no question)'}</div>
+                        <div class="trade-row__direction">${dir}</div>
+                        <div class="trade-row__pnl ${pnlClass}">${pnlText}$${pnl.toFixed(2)}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderBuildLog() {
+            const list = document.getElementById('buildlog-list');
+            const report = state.buildlog;
+
+            if (!report.recommendations) {
+                list.innerHTML = '<div class="empty">no report</div>';
+                return;
+            }
+
+            const items = [];
+
+            // Add implemented improvements
+            const impl = report.recommendations?.auto_implement || [];
+            for (const imp of impl) {
+                // Check if it's in the summary as already done
+                const isDone = report.summary && report.summary.includes(`✅ ${imp.name}`);
+                items.push({
+                    text: imp.name,
+                    done: isDone,
+                });
+            }
+
+            // Add pending APIs
+            const pending = report.api_setup?.pending || [];
+            for (const api of pending) {
+                items.push({
+                    text: api,
+                    done: false,
+                });
+            }
+
+            if (items.length === 0) {
+                list.innerHTML = '<div class="empty">no build items</div>';
+                return;
+            }
+
+            list.innerHTML = items.map(item => {
+                const icon = item.done ? '✅' : '⏳';
+                const cls = item.done ? 'done' : 'pending';
+                return `
+                    <div class="buildlog-item ${cls}">
+                        <div class="buildlog-item__icon">${icon}</div>
+                        <div class="buildlog-item__text">${item.text}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // POLLING SETUP
+        // ─────────────────────────────────────────────────────────────
+
+        function setupPolling() {
+            // Initial fetch
+            fetchStats();
+            fetchSignals();
+            fetchPositions();
+            fetchTrades();
+            fetchBuildLog();
+
+            // Polling
+            setInterval(fetchStats, pollIntervals.stats);
+            setInterval(fetchSignals, pollIntervals.signals);
+            setInterval(fetchPositions, pollIntervals.positions);
+            setInterval(fetchTrades, pollIntervals.trades);
+            setInterval(fetchBuildLog, pollIntervals.buildlog);
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // INIT
+        // ─────────────────────────────────────────────────────────────
+
+        document.addEventListener('DOMContentLoaded', setupPolling);
+    </script>
+</body>
+</html>
