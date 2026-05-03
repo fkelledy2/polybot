@@ -158,12 +158,25 @@ class ScheduledAnalysisAgent:
 
         if plan['user_approval_needed']:
             lines.append("")
-            lines.append("⚠️ OPTIONAL APIs (Require Human Approval):")
+            lines.append("⚠️ OPTIONAL APIs:")
+
+            # Check which APIs are actually configured
+            from config import BRAVE_SEARCH_API_KEY, ODDS_API_KEY, DISCORD_WEBHOOK_URL
+            api_status = {
+                "BRAVE_SEARCH_API_KEY": bool(BRAVE_SEARCH_API_KEY or os.getenv("BRAVE_SEARCH_API_KEY")),
+                "ODDS_API_KEY": bool(ODDS_API_KEY or os.getenv("ODDS_API_KEY")),
+                "DISCORD_WEBHOOK_URL": bool(DISCORD_WEBHOOK_URL or os.getenv("DISCORD_WEBHOOK_URL")),
+            }
+
             for item in plan['user_approval_needed']:
                 cost_note = " (COSTS MONEY)" if item['cost_bearing'] else " (free)"
-                configured = " ✅ CONFIGURED" if item['api'].replace("_KEY", "") in os.environ or item['api'].replace("_KEY", "") in config_content else ""
-                lines.append(f"  • {item['api']}{cost_note}{configured}")
+                is_configured = api_status.get(item['api'], False)
+                status_badge = " ✅ SET" if is_configured else " ❌ NOT SET"
+                lines.append(f"  • {item['api']}{cost_note}{status_badge}")
                 lines.append(f"    Benefit: {item['benefit']}")
+
+            lines.append("")
+            lines.append("Note: Local run shows env vars locally. Remote agent sees production env.")
 
         if plan['future_enhancements']:
             lines.append("")
