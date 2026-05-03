@@ -220,6 +220,71 @@ class ScheduledAnalysisAgent:
         except Exception as e:
             logger.error(f"Failed to save report: {e}")
 
+    def _send_discord_notification(self):
+        """Send analysis summary to Discord if webhook is configured."""
+        from config import DISCORD_WEBHOOK_URL
+
+        if not DISCORD_WEBHOOK_URL:
+            return  # Discord not configured, skip
+
+        try:
+            import requests
+
+            overall = self.report["analysis"]["overall"]
+            critical_count = len(self.report["analysis"]["critical_issues"])
+            exec_result = self.report.get("execution", {})
+
+            # Determine status color
+            if critical_count > 0:
+                color = 15158332  # Red
+                status_emoji = "🔴"
+            elif exec_result.get("status") == "success":
+                color = 3066993  # Green
+                status_emoji = "✅"
+            else:
+                color = 16776960  # Yellow
+                status_emoji = "⚠️"
+
+            # Build Discord embed
+            payload = {
+                "embeds": [{
+                    "title": "📊 Trading System Daily Analysis",
+                    "color": color,
+                    "fields": [
+                        {
+                            "name": "Performance",
+                            "value": f"{overall['wins']}-{overall['losses']} record | {overall['win_rate']:.0%} WR | ${overall['total_pnl']:.2f} PnL",
+                            "inline": False
+                        },
+                        {
+                            "name": f"{status_emoji} Status",
+                            "value": self.report["recommendations"]["critical_status"],
+                            "inline": False
+                        },
+                        {
+                            "name": "Issues Found",
+                            "value": f"{critical_count} critical" if critical_count > 0 else "No critical issues",
+                            "inline": True
+                        },
+                        {
+                            "name": "Improvements",
+                            "value": f"Status: {exec_result.get('status', 'unknown')}",
+                            "inline": True
+                        }
+                    ],
+                    "timestamp": datetime.now().isoformat()
+                }]
+            }
+
+            response = requests.post(DISCORD_WEBHOOK_URL, json=payload)
+            if response.status_code == 204:
+                logger.info("✅ Discord notification sent")
+            else:
+                logger.warning(f"Failed to send Discord notification: {response.status_code}")
+
+        except Exception as e:
+            logger.warning(f"Could not send Discord notification: {e}")
+
     def _log_findings(self):
         """Log key findings to console and logger."""
         print("\n" + "="*100)
@@ -250,6 +315,9 @@ class ScheduledAnalysisAgent:
         # If APIs available, suggest enabling them
         if self.report["api_setup"]["pending"]:
             logger.info(f"Optional APIs ready to enable: {', '.join(self.report['api_setup']['pending'])}")
+
+        # Send to Discord if configured
+        self._send_discord_notification()
 
     def should_prompt_for_api_setup(self) -> bool:
         """Check if human input is needed for API setup."""
