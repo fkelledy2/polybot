@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from analysis.performance import PerformanceAnalyzer
 from analysis.improvements import SystemImprovementEngine
+from analysis.executor import ImprovementsExecutor
 
 logging.basicConfig(
     level=logging.INFO,
@@ -97,7 +98,12 @@ class ScheduledAnalysisAgent:
         # Step 5: Save report
         self._save_report()
 
-        # Step 6: Log key findings
+        # Step 6: Execute improvements (autonomous deployment)
+        logger.info("Executing improvements...")
+        execution_result = self._execute_improvements()
+        self.report["execution"] = execution_result
+
+        # Step 7: Log key findings
         self._log_findings()
 
         return self.report
@@ -152,6 +158,22 @@ class ScheduledAnalysisAgent:
 
         return "\n".join(lines)
 
+    def _execute_improvements(self) -> dict:
+        """Execute improvements identified by analysis."""
+        executor = ImprovementsExecutor()
+        result = executor.execute_improvements(self.report)
+
+        if result["status"] == "success":
+            logger.info(f"✅ Improvements executed: {result['changes_made']}")
+            if result["deployed"]:
+                logger.info("✅ Changes deployed to GitHub")
+        elif result["status"] == "no_changes":
+            logger.info("ℹ️ No improvements to execute")
+        else:
+            logger.info(f"⏭️ Executor skipped: {result['reason']}")
+
+        return result
+
     def _save_report(self):
         """Save report to JSON file."""
         try:
@@ -167,6 +189,22 @@ class ScheduledAnalysisAgent:
         print("\n" + "="*100)
         print(self.report["summary"])
         print("="*100 + "\n")
+
+        # Show execution results
+        exec_result = self.report.get("execution", {})
+        if exec_result:
+            print("AUTONOMOUS IMPROVEMENTS EXECUTION")
+            print("-"*100)
+            if exec_result["status"] == "success":
+                print(f"✅ Status: SUCCESS")
+                print(f"   Changes implemented: {', '.join(exec_result['changes_made'])}")
+                if exec_result["deployed"]:
+                    print(f"   Deployed to GitHub: {exec_result.get('git_commits', ['?'])[0][:8]}")
+            else:
+                print(f"ℹ️ Status: {exec_result['status'].upper()}")
+                if exec_result.get("reason"):
+                    print(f"   Reason: {exec_result['reason']}")
+            print()
 
         # If critical issues, warn prominently
         if self.report["analysis"]["critical_issues"]:
