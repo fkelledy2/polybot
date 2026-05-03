@@ -63,8 +63,8 @@ The costs panel displays:
 
 1. **Service Status** (enabled/disabled)
    - ✓ Anthropic API (always enabled for trading)
-   - ✓ Brave Search (optional, web research)
-   - ✓ Odds API (optional, sports data)
+   - ✓ Brave Search (optional, web research) — **ENABLED**
+   - ✓ Odds API (optional, sports data) — **ENABLED**
    - ✓ Heroku (always enabled for hosting)
 
 2. **Weekly Costs** (last 7 days)
@@ -95,8 +95,8 @@ The costs panel displays:
 ```
 SERVICES
 ● Anthropic API
-○ Brave Search API
-○ Odds API
+● Brave Search API
+● Odds API
 ● Heroku Dyno
 
 WEEKLY
@@ -129,9 +129,9 @@ TOTAL            $16.40
    - Auto-sleeps after 30 minutes of inactivity
    - Upgrade to Standard Dyno ($50/month) only if you need always-on
 
-3. **Disable optional services**
-   - Don't set BRAVE_SEARCH_API_KEY or ODDS_API_KEY unless needed
-   - These add marginal value for significant cost
+3. **Optional services enabled**
+   - **BRAVE_SEARCH_API_KEY** — Web search for market context (cost: $1/1000 queries, typically <$1/month)
+   - **ODDS_API_KEY** — Sports data enrichment (cost: $4.99/1000 requests, typically <$2/month with selective use)
 
 ### Monitoring Costs
 
@@ -147,9 +147,10 @@ The costs panel updates **every 60 seconds**. Check it weekly to:
 With current settings:
 - **Heroku**: $7.00/month (fixed)
 - **Anthropic**: $10-20/month (depends on trade volume)
-- **Optional services**: $0.00 (disabled)
+- **Brave Search**: <$1/month (selective use)
+- **Odds API**: <$2/month (selective use for sports markets)
 
-**Total: ~$17-27/month**
+**Total: ~$18-30/month**
 
 ---
 
@@ -166,9 +167,9 @@ ANTHROPIC_API_KEY=<your-key>               # Claude API access
 DATABASE_URL=<database>                     # (optional) PostgreSQL connection
 
 # Optional for enhanced features (cost: leave unset to disable)
-BRAVE_SEARCH_API_KEY=<key>                 # Web search ($1/1000 queries)
-ODDS_API_KEY=<key>                          # Sports odds ($4.99/1000 requests)
-DISCORD_WEBHOOK_URL=<url>                   # Notifications (free)
+BRAVE_SEARCH_API_KEY=<key>                 # Web search ($1/1000 queries) — ENABLED
+ODDS_API_KEY=<key>                          # Sports odds ($4.99/1000 requests) — ENABLED
+DISCORD_WEBHOOK_URL=<url>                   # Notifications (free) — ENABLED
 ```
 
 ## ⚠️ Important Notes
