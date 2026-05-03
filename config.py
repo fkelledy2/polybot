@@ -30,6 +30,11 @@ STARTING_BALANCE = 600.0      # USD — matches the article's starting amount
 # Edge = (Claude's confidence) minus (market's implied probability)
 # Example: Claude thinks 70% chance, market prices it at 52% → edge = 18%
 MIN_EDGE_TO_TRADE = 0.10      # 10% minimum edge before placing a trade
+# ── Extreme Price Markets ───────────────────────
+# Markets at extreme prices (<5% or >95%) require higher edge.
+MIN_EDGE_TO_TRADE_EXTREME = 0.15  # 15% edge for extreme prices
+EXTREME_PRICE_THRESHOLD = 0.05       # Markets below 5% or above 95%
+
 MIN_ENTRY_PROBABILITY = 0.03   # Never enter a trade at <3% probability (100:33 odds)
 
 # ── Risk Management ───────────────────────────────────────────
@@ -41,6 +46,11 @@ MAX_OPEN_POSITIONS = 10       # Don't hold more than 10 markets at once
 # Note: Polymarket leaderboard API is currently unavailable.
 # Set to False to disable wallet tracking entirely.
 ENABLE_WALLET_TRACKING = False
+
+# ── Wallet Veto Signal ─────────────────────────
+# Disable trades when elite wallets disagree with Claude.
+ENABLE_WALLET_VETO = True
+WALLET_VETO_ON_EXTREME = True  # Especially for extreme prices
 # How many top wallets to track
 TOP_WALLETS_TO_TRACK = 20
 # Minimum win rate for a wallet to be considered "elite"
@@ -72,3 +82,7 @@ BRAVE_SEARCH_API_KEY = os.getenv("BRAVE_SEARCH_API_KEY", "")   # S2-1 web search
 ODDS_API_KEY         = os.getenv("ODDS_API_KEY",         "")   # S2-4 sports lines
 DISCORD_WEBHOOK_URL  = os.getenv("DISCORD_WEBHOOK_URL",  "")   # S3-4 notifications
 DATABASE_URL         = os.getenv("DATABASE_URL",         "")   # S2-3 Heroku Postgres
+
+# ── Calibration Feedback ───────────────────────
+# Track probability estimates vs actual resolutions.
+TRACK_CALIBRATION = True
