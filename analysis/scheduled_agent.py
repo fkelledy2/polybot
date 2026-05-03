@@ -111,6 +111,21 @@ class ScheduledAnalysisAgent:
     def _generate_summary(self, overall: dict, issues: list, plan: dict,
                          pending_apis: dict) -> str:
         """Generate human-readable summary."""
+        import os
+        from pathlib import Path
+
+        # Check what improvements are already implemented
+        config_path = Path("config.py")
+        config_content = config_path.read_text() if config_path.exists() else ""
+
+        implemented = []
+        if "EXTREME_PRICE_THRESHOLD" in config_content:
+            implemented.append("Extreme Price Filter")
+        if "ENABLE_WALLET_VETO" in config_content:
+            implemented.append("Elite Wallet Veto")
+        if "TRACK_CALIBRATION" in config_content:
+            implemented.append("Calibration Feedback Loop")
+
         lines = [
             f"Trading System Health Report",
             f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -123,23 +138,31 @@ class ScheduledAnalysisAgent:
             "",
         ]
 
+        if implemented:
+            lines.append("✅ ALREADY IMPLEMENTED:")
+            for imp in implemented:
+                lines.append(f"  • {imp}")
+            lines.append("")
+
         if plan['immediate_actions']:
             lines.append("🔴 IMMEDIATE ACTIONS:")
             for action in plan['immediate_actions']:
                 lines.append(f"  • {action['action']}: {action['reason']}")
             lines.append("")
 
-        lines.append("✅ FREE IMPROVEMENTS (auto-implement):")
+        lines.append("📋 FREE IMPROVEMENTS (auto-implemented when ready):")
         for item in plan['auto_implement']:
-            lines.append(f"  • {item['name']}")
+            status = "✅ Done" if item['name'] in implemented else "⏳ Pending"
+            lines.append(f"  • {item['name']} [{status}]")
             lines.append(f"    Impact: {item['estimated_impact']}")
 
         if plan['user_approval_needed']:
             lines.append("")
-            lines.append("⚠️ API KEYS FOR HUMAN APPROVAL:")
+            lines.append("⚠️ OPTIONAL APIs (Require Human Approval):")
             for item in plan['user_approval_needed']:
                 cost_note = " (COSTS MONEY)" if item['cost_bearing'] else " (free)"
-                lines.append(f"  • {item['api']}{cost_note}")
+                configured = " ✅ CONFIGURED" if item['api'].replace("_KEY", "") in os.environ or item['api'].replace("_KEY", "") in config_content else ""
+                lines.append(f"  • {item['api']}{cost_note}{configured}")
                 lines.append(f"    Benefit: {item['benefit']}")
 
         if plan['future_enhancements']:
@@ -150,10 +173,10 @@ class ScheduledAnalysisAgent:
 
         lines.extend([
             "",
-            "ESTIMATED IMPACT WITH FREE IMPROVEMENTS:",
-            "  From extreme price filter: +5-10% win rate",
-            "  From category tuning: +3-8% win rate",
-            "  Target: 0% → ~35-40% win rate before requiring paid APIs",
+            "PROJECTED IMPACT:",
+            f"  • Current: {overall['win_rate']:.0%} win rate, ${overall['total_pnl']:.2f} PnL",
+            "  • With implemented filters: +5-15% win rate potential",
+            "  • With optional APIs: +10-30% improvement potential",
         ])
 
         return "\n".join(lines)

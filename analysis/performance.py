@@ -295,10 +295,15 @@ class PerformanceAnalyzer:
             DATABASE_URL, ENABLE_WALLET_TRACKING
         )
 
+        # Check both config AND environment variables (for production/Heroku)
+        brave_search = bool(BRAVE_SEARCH_API_KEY or os.getenv("BRAVE_SEARCH_API_KEY"))
+        odds_api = bool(ODDS_API_KEY or os.getenv("ODDS_API_KEY"))
+        discord = bool(DISCORD_WEBHOOK_URL or os.getenv("DISCORD_WEBHOOK_URL"))
+
         return {
-            "BRAVE_SEARCH": bool(BRAVE_SEARCH_API_KEY),
-            "ODDS_API": bool(ODDS_API_KEY),
-            "DISCORD_ALERTS": bool(DISCORD_WEBHOOK_URL),
+            "BRAVE_SEARCH": brave_search,
+            "ODDS_API": odds_api,
+            "DISCORD_ALERTS": discord,
             "POSTGRESQL": bool(DATABASE_URL),
             "WALLET_TRACKING": ENABLE_WALLET_TRACKING,
         }

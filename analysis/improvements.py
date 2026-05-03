@@ -140,17 +140,18 @@ class SystemImprovementEngine:
         )
 
         pending = {}
-        if not ODDS_API_KEY:
+        # Check both config.py AND environment (for production/Heroku)
+        if not (ODDS_API_KEY or os.getenv("ODDS_API_KEY")):
             pending["ODDS_API_KEY"] = (
                 "TheOdds API - Sports data for market enrichment. "
                 "Free tier available: https://theoddsapi.com"
             )
-        if not BRAVE_SEARCH_API_KEY:
+        if not (BRAVE_SEARCH_API_KEY or os.getenv("BRAVE_SEARCH_API_KEY")):
             pending["BRAVE_SEARCH_API_KEY"] = (
                 "Brave Search API - Web search for market context. "
                 "Paid only: https://api.search.brave.com"
             )
-        if not DISCORD_WEBHOOK_URL:
+        if not (DISCORD_WEBHOOK_URL or os.getenv("DISCORD_WEBHOOK_URL")):
             pending["DISCORD_WEBHOOK_URL"] = (
                 "Discord webhook for alerts (optional, free to set up). "
                 "Setup instructions in docs."
