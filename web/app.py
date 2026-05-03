@@ -363,6 +363,22 @@ def api_costs():
     return jsonify(get_all_costs_summary())
 
 
+@app.route("/.claude/analysis_report.json")
+@login_required
+def api_analysis_report():
+    """Return the latest trading system analysis report."""
+    try:
+        report_path = os.path.join(os.getcwd(), ".claude", "analysis_report.json")
+        if os.path.exists(report_path):
+            with open(report_path, "r") as f:
+                return jsonify(json.load(f))
+        else:
+            return jsonify({"error": "No analysis report available"}), 404
+    except Exception as e:
+        logger.error(f"Error loading analysis report: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/webhooks/deploy", methods=["POST"])
 def webhook_deploy():
     """Webhook endpoint for deployment notifications (GitHub/Heroku)."""

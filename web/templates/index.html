@@ -192,8 +192,10 @@
     #bottom-grid > .panel:nth-child(3) { grid-column: 3; grid-row: 1; }
     /* Cost panel: column 4, row 1 (1/4 width) */
     #bottom-grid > .panel:nth-child(4) { grid-column: 4; grid-row: 1; }
-    /* Activity log: columns 1-4, row 2 (full width at bottom) */
-    #bottom-grid > .panel:nth-child(5) { grid-column: 1 / 5; grid-row: 2; }
+    /* Activity log: columns 1-2, row 2 (50% left) */
+    #bottom-grid > .panel:nth-child(5) { grid-column: 1 / 3; grid-row: 2; }
+    /* Improvement log: columns 3-4, row 2 (50% right) */
+    #bottom-grid > .panel:nth-child(6) { grid-column: 3 / 5; grid-row: 2; }
 
     /* ══════════════════════════════════════════
        PANELS
@@ -855,6 +857,17 @@
       </span>
     </div>
     <div id="log-terminal"></div>
+  </div>
+
+  <!-- IMPROVEMENT LOG -->
+  <div class="panel">
+    <div class="panel-title">
+      <span class="slash">// </span>BUILD LOG / IMPROVEMENTS
+      <span style="margin-left:auto;display:flex;align-items:center;gap:5px;">
+        <span style="color:var(--muted);font-size:9px;" id="improvement-count">—</span>
+      </span>
+    </div>
+    <div id="improvement-log" style="overflow-y:auto;flex:1;font-size:9px;line-height:1.4;color:var(--muted);"></div>
   </div>
 
 </div><!-- /bottom-grid -->
@@ -1569,6 +1582,84 @@ function startSSE() {
 }
 
 // ══════════════════════════════════════════════════════════════
+// IMPROVEMENT LOG (Build log / daily improvements)
+// ══════════════════════════════════════════════════════════════
+async function refreshImprovementLog() {
+  try {
+    // Fetch the latest analysis report
+    const response = await fetch('/.claude/analysis_report.json');
+    if (!response.ok) return;
+
+    const report = await response.json();
+    const el = document.getElementById('improvement-log');
+
+    if (!report.analysis || !report.analysis.critical_issues) {
+      el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">No improvements available</div>';
+      return;
+    }
+
+    let html = '';
+
+    // Show execution status
+    const exec = report.execution || {};
+    if (exec.status === 'success' && exec.changes_made) {
+      html += '<div style="margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">';
+      html += '<div style="color:var(--green);font-weight:bold;margin-bottom:4px;">✅ IMPROVEMENTS DEPLOYED</div>';
+      for (const change of exec.changes_made) {
+        html += `<div style="margin-left:8px;color:#5ab87a;">• ${change}</div>`;
+      }
+      if (exec.git_commits && exec.git_commits[0]) {
+        html += `<div style="margin-left:8px;color:var(--muted);font-size:8px;margin-top:4px;">Commit: ${exec.git_commits[0].substring(0, 8)}</div>`;
+      }
+      html += '</div>';
+    } else if (exec.status === 'no_changes') {
+      html += '<div style="margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--muted);">ℹ️ No changes needed</div>';
+    }
+
+    // Show configured improvements
+    if (report.recommendations && report.recommendations.auto_implement) {
+      html += '<div style="margin-bottom:8px;"><div style="color:var(--amber);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📋 Implemented</div>';
+      for (const imp of report.recommendations.auto_implement) {
+        if (imp.name.includes('Extreme') || imp.name.includes('Wallet') || imp.name.includes('Calibration')) {
+          html += `<div style="margin-left:8px;color:#5ab87a;font-size:9px;margin-bottom:3px;">✓ ${imp.name}</div>`;
+        }
+      }
+      html += '</div>';
+    }
+
+    // Show pending improvements
+    if (report.recommendations && report.recommendations.auto_implement) {
+      const pending = report.recommendations.auto_implement.filter(i => !i.name.includes('Extreme') && !i.name.includes('Wallet') && !i.name.includes('Calibration'));
+      if (pending.length > 0) {
+        html += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">⏳ Pending</div>';
+        for (const imp of pending) {
+          html += `<div style="margin-left:8px;color:var(--muted);font-size:9px;margin-bottom:3px;">• ${imp.name}</div>`;
+        }
+        html += '</div>';
+      }
+    }
+
+    // Show last updated
+    if (report.timestamp) {
+      const updated = new Date(report.timestamp);
+      const timeAgo = Math.floor((Date.now() - updated) / 1000);
+      let timeStr = timeAgo + 's ago';
+      if (timeAgo > 3600) timeStr = Math.floor(timeAgo / 3600) + 'h ago';
+      else if (timeAgo > 60) timeStr = Math.floor(timeAgo / 60) + 'm ago';
+
+      document.getElementById('improvement-count').textContent = timeStr;
+      html += `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);color:var(--muted);font-size:8px;">Updated: ${updated.toLocaleTimeString()}</div>`;
+    }
+
+    el.innerHTML = html || '<div style="color:var(--muted);padding:20px 0;text-align:center">No data available</div>';
+
+  } catch(e) {
+    console.warn('Failed to load improvement log:', e);
+    document.getElementById('improvement-log').innerHTML = '<div style="color:var(--red);padding:20px 0;text-align:center">Error loading improvements</div>';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
 // BOOT SEQUENCE
 // ══════════════════════════════════════════════════════════════
 console.log('[BOOT] Initializing dashboard...');
@@ -1584,6 +1675,8 @@ console.log('[BOOT] Starting initial data load...');
 refreshStats();
 console.log('[BOOT] Stats loaded');
 refreshSignals();
+refreshImprovementLog();
+console.log('[BOOT] Improvement log loaded');
 console.log('[BOOT] Signals loaded');
 refreshMarkets();
 console.log('[BOOT] Markets loaded');
