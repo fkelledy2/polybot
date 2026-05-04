@@ -8,6 +8,7 @@
     <meta name="apple-mobile-web-app-title" content="POLYBOT//M">
     <meta name="theme-color" content="#000000">
     <title>POLYBOT//M</title>
+    <script>if(!sessionStorage.getItem('view-override') && window.innerWidth >= 768) location.replace('/');</script>
     <style>
         /* ─────────────────────────────────────────────────────────────
            DESIGN TOKENS (Terminal Aesthetic)
@@ -438,7 +439,7 @@
 <body>
     <!-- HEADER -->
     <div class="header">
-        <div class="header__logo">POLYBOT//M</div>
+        <a href="/" style="text-decoration:none;color:inherit;" onclick="sessionStorage.setItem('view-override','1')"><div class="header__logo">POLYBOT//M</div></a>
         <div class="header__stat">
             <div class="header__stat-label">P&L</div>
             <div class="header__stat-value" id="header-pnl">—</div>

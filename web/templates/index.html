@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>POLYBOT // TERMINAL</title>
+  <script>if(!sessionStorage.getItem('view-override') && window.innerWidth < 768) location.replace('/mobile');</script>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%23000' width='32' height='32'/><text x='4' y='24' font-size='20' fill='%2300ff41' font-family='monospace' font-weight='bold'>◆</text></svg>">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
@@ -730,7 +731,7 @@
 
   <!-- Controls — always visible, not part of the scrollable strip -->
   <div class="h-controls">
-    <a href="/mobile" class="btn-ghost">MOBILE ›</a>
+    <a href="/mobile" class="btn-ghost" onclick="sessionStorage.setItem('view-override','1')">MOBILE ›</a>
     <button class="btn-ghost" onclick="openBacktest()">BACKTEST ›</button>
     <span class="mode-badge" id="h-status">&#9679; PAPER</span>
     <span id="clock">00:00:00</span>
