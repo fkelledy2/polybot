@@ -77,6 +77,7 @@ def main():
         logger.info(f"Building elite wallet list (top {TOP_WALLETS_TO_TRACK})...")
         elite_wallets = wallet_tracker.build_elite_list(top_n=TOP_WALLETS_TO_TRACK)
         logger.info(f"Tracking {len(elite_wallets)} elite wallets")
+        update_signals([], [], len(elite_wallets), elite_wallets)
     else:
         logger.info("Wallet tracking disabled (Polymarket leaderboard API unavailable)")
 
@@ -244,7 +245,7 @@ def main():
                 logger.info(f"Trade blocked: {reason}")
 
         # ── 7. Dashboard + logging ────────────────────────────
-        update_signals(all_signals, markets_parsed, len(elite_wallets))
+        update_signals(all_signals, markets_parsed, len(elite_wallets), elite_wallets)
         log_signals(all_signals)
 
         logger.info(f"Scan #{scan_count} complete. New trades: {new_trades}")

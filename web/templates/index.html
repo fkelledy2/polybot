@@ -1158,6 +1158,34 @@ async function refreshSignals() {
 // ══════════════════════════════════════════════════════════════
 // LIVE MARKETS
 // ══════════════════════════════════════════════════════════════
+async function refreshWallets() {
+  try {
+    const wallets = await fetch('/api/wallets').then(r => r.json());
+    const body  = document.getElementById('wallet-body');
+    const badge = document.getElementById('wallet-badge');
+    badge.textContent = wallets.length + ' TRACKED';
+    if (!wallets.length) {
+      body.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center;font-size:10px">No elite wallets found</div>';
+      return;
+    }
+    body.innerHTML = wallets.map(w => `
+      <div class="wallet-row">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-family:monospace;font-size:10px;color:var(--green)">${w.address.slice(0,6)}...${w.address.slice(-4)}</span>
+          <span class="tag-elite" style="font-size:9px;padding:1px 5px">ELITE</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px">
+          <span style="font-size:10px;color:var(--muted)">30d PnL</span>
+          <span style="font-size:10px;color:${w.pnl>=0?'var(--green)':'var(--red)'}">${w.pnl>=0?'+':''}$${Math.abs(w.pnl).toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:1px">
+          <span style="font-size:10px;color:var(--muted)">Win rate</span>
+          <span style="font-size:10px;color:var(--muted)">${(w.win_rate*100).toFixed(0)}%</span>
+        </div>
+      </div>`).join('');
+  } catch(e) { console.warn('wallets', e); }
+}
+
 async function refreshMarkets() {
   const el = document.getElementById('markets-body');
   console.log('[MARKETS] Fetching markets from /api/markets...');
@@ -1677,6 +1705,7 @@ console.log('[BOOT] Starting initial data load...');
 refreshStats();
 console.log('[BOOT] Stats loaded');
 refreshSignals();
+refreshWallets();
 refreshImprovementLog();
 console.log('[BOOT] Improvement log loaded');
 console.log('[BOOT] Signals loaded');
@@ -1695,6 +1724,7 @@ console.log('[BOOT] Costs loaded');
 console.log('[BOOT] Setting up polling intervals...');
 setInterval(refreshStats,         5000);
 setInterval(refreshSignals,       SIGNAL_REFRESH_MS);
+setInterval(refreshWallets,       30000);
 setInterval(refreshMarkets,       8000);
 setInterval(refreshTrades,        10000);
 setInterval(refreshChart,         20000);

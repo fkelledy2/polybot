@@ -46,6 +46,7 @@ shared_state: dict = {
     "model":           "—",
     "edges_found":     0,
     "wallets_tracked": 0,
+    "elite_wallets":   [],
 }
 
 # ── Signal buffer (all signals from last scan) ────────────────
@@ -86,7 +87,8 @@ def install_log_handler() -> None:
     logging.getLogger().addHandler(handler)
 
 
-def update_signals(all_signals: list, markets: list, wallets_tracked: int) -> None:
+def update_signals(all_signals: list, markets: list, wallets_tracked: int,
+                   elite_wallets: list = None) -> None:
     """Called by main.py each scan to push latest signal data."""
     global recent_signals, recent_markets
     with _state_lock:
@@ -94,6 +96,17 @@ def update_signals(all_signals: list, markets: list, wallets_tracked: int) -> No
         recent_markets = markets[:]
         shared_state["edges_found"]     = sum(1 for s in all_signals if s.should_trade)
         shared_state["wallets_tracked"] = wallets_tracked
+        if elite_wallets is not None:
+            shared_state["elite_wallets"] = [
+                {
+                    "address":   w.address,
+                    "name":      w.address[:10] + "...",
+                    "pnl":       round(w.total_pnl_usd, 2),
+                    "win_rate":  round(w.win_rate, 4),
+                    "positions": len(w.current_positions),
+                }
+                for w in elite_wallets
+            ]
 
 
 def _signal_to_dict(signal, markets: list) -> dict:
@@ -378,6 +391,13 @@ def api_backtest_tracker():
 def api_costs():
     """Return SaaS service costs and usage."""
     return jsonify(get_all_costs_summary())
+
+
+@app.route("/api/wallets")
+@login_required
+def api_wallets():
+    with _state_lock:
+        return jsonify(shared_state.get("elite_wallets", []))
 
 
 @app.route("/.claude/analysis_report.json")
