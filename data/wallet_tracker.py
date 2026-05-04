@@ -1,8 +1,8 @@
 # data/wallet_tracker.py
 # ─────────────────────────────────────────────────────────────
 # Finds and tracks "elite" wallets on Polymarket.
-# Discovery: scrapes __NEXT_DATA__ from the leaderboard page
-#            (the old leaderboard-api.polymarket.com is dead).
+# Discovery: Next.js _next/data endpoint (no browser required).
+#            leaderboard-api.polymarket.com is dead.
 # Positions: data-api.polymarket.com/positions (works).
 # ─────────────────────────────────────────────────────────────
 
@@ -14,6 +14,9 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+_LEADERBOARD_URL = "https://polymarket.com/leaderboard/overall/monthly/profit"
+_NEXT_DATA_TMPL  = "https://polymarket.com/_next/data/{build_id}/en/leaderboard/overall/monthly/profit.json"
 
 
 @dataclass
@@ -51,54 +54,55 @@ class WalletTracker:
     """
     Discovers and tracks high-performing wallets on Polymarket.
 
-    Discovery uses Playwright to scrape the leaderboard page's SSR data
-    (__NEXT_DATA__), which contains the top-20 profit traders with their
-    wallet addresses and 30-day PnL.
+    Discovery: fetches the leaderboard page HTML to extract the Next.js
+    build ID, then calls the _next/data endpoint directly — returns the
+    full SSR leaderboard JSON with wallet addresses and 30-day PnL.
+    No headless browser required.
     """
 
     def __init__(self):
         self.session = requests.Session()
+        self.session.headers.update({"User-Agent": "Mozilla/5.0"})
         self.tracked_wallets: dict[str, WalletProfile] = {}
         self.elite_wallets: list[WalletProfile] = []
 
+    def _get_build_id(self) -> Optional[str]:
+        """Extract the Next.js build ID from the leaderboard page HTML."""
+        try:
+            resp = self.session.get(_LEADERBOARD_URL, timeout=15)
+            resp.raise_for_status()
+            match = re.search(r'"buildId"\s*:\s*"([^"]+)"', resp.text)
+            if not match:
+                # Fallback: build ID also appears as a path segment
+                match = re.search(r'/(build-[A-Za-z0-9_-]+)/', resp.text)
+            return match.group(1) if match else None
+        except requests.RequestException as e:
+            logger.warning(f"Could not fetch leaderboard page for build ID: {e}")
+            return None
+
     def fetch_top_wallets(self, limit: int = 100) -> list[dict]:
         """
-        Scrape the Polymarket leaderboard page and extract top traders
-        from the embedded __NEXT_DATA__ SSR cache.
+        Fetch top traders from Polymarket's leaderboard via the Next.js
+        _next/data endpoint (SSR JSON, no browser needed).
 
-        Returns list of dicts: {rank, proxyWallet, pnl, name/pseudonym, ...}
+        Returns list of dicts: {rank, proxyWallet, pnl, name, ...}
         """
+        build_id = self._get_build_id()
+        if not build_id:
+            logger.warning("Could not determine Next.js build ID — wallet tracking disabled")
+            return []
+
+        url = _NEXT_DATA_TMPL.format(build_id=build_id)
         try:
-            from playwright.sync_api import sync_playwright
+            resp = self.session.get(url, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
 
-            with sync_playwright() as p:
-                browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                page.goto(
-                    "https://polymarket.com/leaderboard/overall/monthly/profit",
-                    wait_until="networkidle",
-                    timeout=30000,
-                )
-                content = page.content()
-                browser.close()
-
-            match = re.search(
-                r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>',
-                content,
-                re.DOTALL,
-            )
-            if not match:
-                logger.warning("__NEXT_DATA__ not found in leaderboard page")
-                return []
-
-            data = json.loads(match.group(1))
             queries = (
-                data.get("props", {})
-                .get("pageProps", {})
+                data.get("pageProps", {})
                 .get("dehydratedState", {})
                 .get("queries", [])
             )
-
             profit_query = next(
                 (
                     q for q in queries
@@ -108,21 +112,19 @@ class WalletTracker:
                 None,
             )
             if not profit_query:
-                logger.warning("No profit leaderboard query in SSR data")
+                logger.warning("No profit leaderboard query in _next/data response")
                 return []
 
             traders = profit_query["state"]["data"][:limit]
-            logger.info(f"Scraped {len(traders)} traders from leaderboard page")
+            logger.info(f"Fetched {len(traders)} traders from leaderboard")
             return traders
 
         except Exception as e:
-            logger.warning(f"Leaderboard scrape failed: {e}")
+            logger.warning(f"Leaderboard _next/data fetch failed: {e}")
             return []
 
     def fetch_wallet_positions(self, address: str) -> list[dict]:
-        """
-        Fetch open positions for a wallet via data-api.polymarket.com.
-        """
+        """Fetch open positions for a wallet via data-api.polymarket.com."""
         try:
             response = self.session.get(
                 "https://data-api.polymarket.com/positions",
@@ -139,17 +141,14 @@ class WalletTracker:
 
     def build_elite_list(self, top_n: int = 20) -> list[WalletProfile]:
         """
-        Build the elite wallet list from leaderboard top traders.
-
-        Leaderboard wallets are already ranked by 30-day profit — the top N
-        with positive PnL are treated as elite without needing a separate
-        win-rate check (they've demonstrably made money recently).
+        Build the elite wallet list from the top-N leaderboard traders
+        with positive 30-day PnL.
         """
         logger.info("Building elite wallet list from leaderboard...")
 
         traders = self.fetch_top_wallets(limit=top_n * 3)
         if not traders:
-            logger.info("No traders scraped — running without wallet signals")
+            logger.info("No traders fetched — running without wallet signals")
             return []
 
         profiles = []
@@ -162,13 +161,10 @@ class WalletTracker:
                 continue
 
             name = t.get("name") or t.get("pseudonym") or addr[:10]
-            # Leaderboard wallets have many trades by definition.
-            # We don't have per-trade win/loss data here, so set placeholders
-            # that satisfy is_elite (total_trades >= 50, win_rate >= 0.55).
             profile = WalletProfile(
                 address=addr,
-                total_trades=100,
-                winning_trades=60,  # 60% assumed for leaderboard top traders
+                total_trades=100,   # leaderboard wallets have many trades by definition
+                winning_trades=60,  # 60% assumed for leaderboard top-profit traders
                 total_pnl_usd=pnl,
             )
             profiles.append(profile)
@@ -186,11 +182,8 @@ class WalletTracker:
         return self.elite_wallets
 
     def get_elite_signals(self) -> list[dict]:
-        """
-        For each elite wallet, return their current open positions as signals.
-        """
+        """Return current open positions of elite wallets as trading signals."""
         signals = []
-
         for wallet in self.elite_wallets:
             positions = self.fetch_wallet_positions(wallet.address)
             for pos in positions:
