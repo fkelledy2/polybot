@@ -43,9 +43,8 @@ DAILY_LOSS_LIMIT  = 0.10      # Stop trading for the day if down 10%
 MAX_OPEN_POSITIONS = 10       # Don't hold more than 10 markets at once
 
 # ── Wallet Copy-Trading ───────────────────────────────────────
-# Note: Polymarket leaderboard API is currently unavailable.
-# Set to False to disable wallet tracking entirely.
-ENABLE_WALLET_TRACKING = False
+# Discovery via Playwright scrape of polymarket.com/leaderboard __NEXT_DATA__.
+ENABLE_WALLET_TRACKING = True
 
 # ── Wallet Veto Signal ─────────────────────────
 # Disable trades when elite wallets disagree with Claude.
