@@ -1,71 +1,25 @@
 {
-  "timestamp": "2026-05-04T14:40:10.268541",
+  "timestamp": "2026-05-04T15:33:48.014909",
   "analysis": {
     "overall": {
-      "total_trades": 5,
-      "closed_trades": 4,
-      "open_trades": 1,
+      "total_trades": 0,
+      "closed_trades": 0,
+      "open_trades": 0,
       "wins": 0,
-      "losses": 4,
-      "win_rate": 0.0,
-      "total_pnl": -111.3,
-      "avg_pnl_per_trade": -27.825,
-      "win_loss_ratio": 0.0,
-      "avg_entry_price": 0.00739999999999999
+      "losses": 0,
+      "win_rate": 0,
+      "total_pnl": 0,
+      "avg_pnl_per_trade": 0,
+      "win_loss_ratio": 0,
+      "avg_entry_price": 0.5
     },
-    "by_category": {
-      "GENERAL": {
-        "trades": 2,
-        "wins": 0,
-        "losses": 1,
-        "win_rate": "0.0%",
-        "avg_pnl": "$-30.00"
-      },
-      "CRYPTO": {
-        "trades": 3,
-        "wins": 0,
-        "losses": 3,
-        "win_rate": "0.0%",
-        "avg_pnl": "$-27.10"
-      }
-    },
-    "critical_issues": [
-      {
-        "severity": "critical",
-        "issue": "Win rate only 0% across 4 closed trades",
-        "impact": "Portfolio is losing money faster than random chance",
-        "recommendation": "Immediate: Disable auto-trading. Run full calibration analysis before proceeding."
-      },
-      {
-        "severity": "critical",
-        "issue": "4/5 extreme-price trades lost (80%)",
-        "impact": "Claude is finding false 'mispricings' at market extremes where pricing is most efficient",
-        "recommendation": "Add confidence ceiling: require 15% edge (not 10%) for markets <5% or >95% probability"
-      },
-      {
-        "severity": "high",
-        "issue": "GENERAL: 0/2 wins (0%)",
-        "impact": "Consistent losses in GENERAL category indicates systematic bias",
-        "recommendation": "Reduce confidence threshold for GENERAL by 20%, or disable category entirely"
-      },
-      {
-        "severity": "high",
-        "issue": "CRYPTO: 0/3 wins (0%)",
-        "impact": "Consistent losses in CRYPTO category indicates systematic bias",
-        "recommendation": "Reduce confidence threshold for CRYPTO by 20%, or disable category entirely"
-      }
-    ]
+    "by_category": {},
+    "critical_issues": []
   },
   "recommendations": {
-    "timestamp": "2026-05-04T14:40:10.268376",
-    "critical_status": "CRITICAL: Win rate below 33% (worse than random). Stop trading.",
-    "immediate_actions": [
-      {
-        "action": "DISABLE_AUTO_TRADING",
-        "reason": "Critical issues identified",
-        "command": "Set PAPER_TRADING=False or add trading circuit breaker"
-      }
-    ],
+    "timestamp": "2026-05-04T15:33:48.014796",
+    "critical_status": "NO_DATA: Need at least 5 closed trades for reliable assessment",
+    "immediate_actions": [],
     "auto_implement": [
       {
         "name": "Extreme Price Filter",
@@ -80,9 +34,7 @@
         "name": "Category Confidence Ceiling",
         "description": "Reduce confidence threshold for under-performing categories",
         "changes": {
-          "DISABLE_CATEGORIES": [
-            "CRYPTO"
-          ]
+          "DISABLE_CATEGORIES": []
         },
         "estimated_impact": "High: Cuts losing trades by category"
       },
@@ -125,5 +77,5 @@
     "pending": [],
     "details": {}
   },
-  "summary": "Trading System Health Report\nGenerated: 2026-05-04 14:40:10\n\nPerformance: 0-4 (0% WR) across 5 trades\nP&L: $-111.30 total\n\nStatus: CRITICAL: Win rate below 33% (worse than random). Stop trading.\n\n\u2705 ALREADY IMPLEMENTED:\n  \u2022 Extreme Price Filter\n  \u2022 Elite Wallet Veto\n  \u2022 Calibration Feedback Loop\n\n\ud83d\udd34 IMMEDIATE ACTIONS:\n  \u2022 DISABLE_AUTO_TRADING: Critical issues identified\n\n\ud83d\udccb FREE IMPROVEMENTS (auto-implemented when ready):\n  \u2022 Extreme Price Filter [\u2705 Done]\n    Impact: Very High: Eliminates worst-performing 80% of trades\n  \u2022 Category Confidence Ceiling [\u23f3 Pending]\n    Impact: High: Cuts losing trades by category\n  \u2022 Elite Wallet Veto [\u2705 Done]\n    Impact: Medium: Prevents contrarian bets when smart money disagrees\n  \u2022 Calibration Feedback Loop [\u2705 Done]\n    Impact: Medium: Enables continuous improvement cycle\n\n\ud83d\ude80 FUTURE ENHANCEMENTS:\n  \u2022 Extended Thinking Confirmation: Reduce false signals by 30-40%\n\nPROJECTED IMPACT:\n  \u2022 Current: 0% win rate, $-111.30 PnL\n  \u2022 With implemented filters: +5-15% win rate potential\n  \u2022 With optional APIs: +10-30% improvement potential"
+  "summary": "Trading System Health Report\nGenerated: 2026-05-04 15:33:48\n\nPerformance: 0-0 (0% WR) across 0 trades\nP&L: $0.00 total\n\nStatus: NO_DATA: Need at least 5 closed trades for reliable assessment\n\n\u2705 ALREADY IMPLEMENTED:\n  \u2022 Extreme Price Filter\n  \u2022 Category Confidence Ceiling\n  \u2022 Elite Wallet Veto\n  \u2022 Calibration Feedback Loop\n\n\ud83d\udccb FREE IMPROVEMENTS (auto-implemented when ready):\n  \u2022 Extreme Price Filter [\u2705 Done]\n    Impact: Very High: Eliminates worst-performing 80% of trades\n  \u2022 Category Confidence Ceiling [\u2705 Done]\n    Impact: High: Cuts losing trades by category\n  \u2022 Elite Wallet Veto [\u2705 Done]\n    Impact: Medium: Prevents contrarian bets when smart money disagrees\n  \u2022 Calibration Feedback Loop [\u2705 Done]\n    Impact: Medium: Enables continuous improvement cycle\n\n\ud83d\ude80 FUTURE ENHANCEMENTS:\n  \u2022 Extended Thinking Confirmation: Reduce false signals by 30-40%\n\nPROJECTED IMPACT:\n  \u2022 Current: 0% win rate, $0.00 PnL\n  \u2022 With implemented filters: +5-15% win rate potential\n  \u2022 With optional APIs: +10-30% improvement potential"
 }
