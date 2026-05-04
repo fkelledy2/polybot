@@ -116,11 +116,11 @@ def check_stop_losses(paper_trader, markets: list[dict]) -> list[str]:
 
         # How far has the price moved against our position?
         if trade.direction == "YES":
-            adverse_move = trade.entry_price - current_yes   # positive = bad
+            adverse_move = trade.entry_price - current_yes   # positive = bad for YES
         else:
-            entry_no  = 1.0 - trade.entry_price
+            # trade.entry_price IS the NO price (1 - YES_at_entry)
             current_no = 1.0 - current_yes
-            adverse_move = entry_no - current_no             # positive = bad for NO
+            adverse_move = trade.entry_price - current_no    # positive = NO price fell
 
         if adverse_move >= 2.0 * abs_edge:
             # Stop-loss always closes at a loss. resolved_yes must produce won=False:
