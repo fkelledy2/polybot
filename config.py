@@ -29,7 +29,7 @@ STARTING_BALANCE = 1000.0     # USD — fresh account reset
 # Claude will only suggest a trade if the "edge" is big enough.
 # Edge = (Claude's confidence) minus (market's implied probability)
 # Example: Claude thinks 70% chance, market prices it at 52% → edge = 18%
-MIN_EDGE_TO_TRADE = 0.10      # 10% minimum edge before placing a trade
+MIN_EDGE_TO_TRADE = 0.06      # 6% minimum edge before placing a trade (Dune-optimized)
 # ── Extreme Price Markets ───────────────────────
 # Markets at extreme prices (<3% or >97%) require higher edge.
 MIN_EDGE_TO_TRADE_EXTREME = 0.20  # 20% edge for extreme prices (backtest-optimized)
@@ -62,7 +62,7 @@ MIN_TRADES_FOR_TRUST = 50
 # Only trade markets that resolve within this many days.
 # Short-resolution markets give faster feedback and don't lock
 # up capital for months. Set to None to disable the filter.
-MAX_DAYS_TO_RESOLVE = 30      # Skip markets resolving > 30 days away
+MAX_DAYS_TO_RESOLVE = 16      # Skip markets resolving > 16 days away (Dune-optimized)
 
 # ── Category Performance Tuning ────────────────
 # Disable trading in weak-performing categories.
