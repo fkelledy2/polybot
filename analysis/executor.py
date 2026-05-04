@@ -156,6 +156,11 @@ class ImprovementsExecutor:
 
         config_content = self.config_path.read_text()
 
+        # Check if already configured with the same categories
+        if "DISABLED_CATEGORIES" in config_content:
+            logger.info("Category ceiling already configured")
+            return
+
         # Add category disabling config
         insertion = (
             f"\n# ── Category Performance Tuning ────────────────\n"

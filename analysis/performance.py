@@ -60,7 +60,35 @@ class PerformanceAnalyzer:
         self.trades = self._load_trades()
 
     def _load_trades(self) -> list[dict]:
-        """Load all trades from database."""
+        """Load all trades from database. Uses Postgres if DATABASE_URL is set, else SQLite."""
+        import os
+        database_url = os.getenv("DATABASE_URL", "")
+
+        if database_url:
+            return self._load_trades_postgres(database_url)
+        return self._load_trades_sqlite()
+
+    def _load_trades_postgres(self, database_url: str) -> list[dict]:
+        """Load trades from Heroku Postgres."""
+        try:
+            import psycopg2
+            import psycopg2.extras
+            conn = psycopg2.connect(database_url, sslmode="require")
+            cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+            cur.execute("SELECT * FROM trades ORDER BY timestamp")
+            trades = [dict(row) for row in cur.fetchall()]
+            conn.close()
+            logger.info(f"Loaded {len(trades)} trades from Postgres")
+            return trades
+        except ImportError:
+            logger.warning("psycopg2 not available, falling back to SQLite")
+            return self._load_trades_sqlite()
+        except Exception as e:
+            logger.warning(f"Postgres load failed ({e}), falling back to SQLite")
+            return self._load_trades_sqlite()
+
+    def _load_trades_sqlite(self) -> list[dict]:
+        """Load trades from local SQLite database."""
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
@@ -68,6 +96,7 @@ class PerformanceAnalyzer:
             cursor.execute("SELECT * FROM trades ORDER BY timestamp")
             trades = [dict(row) for row in cursor.fetchall()]
             conn.close()
+            logger.info(f"Loaded {len(trades)} trades from SQLite")
             return trades
         except Exception as e:
             logger.error(f"Failed to load trades: {e}")

@@ -67,10 +67,6 @@ MAX_DAYS_TO_RESOLVE = 30      # Skip markets resolving > 30 days away
 # ── Category Performance Tuning ────────────────
 # Disable trading in weak-performing categories.
 DISABLED_CATEGORIES = ['CRYPTO']
-
-# ── Category Performance Tuning ────────────────
-# Disable trading in weak-performing categories.
-DISABLED_CATEGORIES = ['CRYPTO']
 MIN_DAYS_TO_RESOLVE = 1       # Skip markets resolving < 1 day away (too late)
 
 # ── Scheduling ────────────────────────────────────────────────
