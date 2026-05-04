@@ -121,6 +121,8 @@ class ScheduledAnalysisAgent:
         implemented = []
         if "EXTREME_PRICE_THRESHOLD" in config_content:
             implemented.append("Extreme Price Filter")
+        if "DISABLED_CATEGORIES" in config_content:
+            implemented.append("Category Confidence Ceiling")
         if "ENABLE_WALLET_VETO" in config_content:
             implemented.append("Elite Wallet Veto")
         if "TRACK_CALIBRATION" in config_content:

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-05-03T08:40:40.628831",
+  "timestamp": "2026-05-04T14:40:10.268541",
   "analysis": {
     "overall": {
       "total_trades": 5,
@@ -57,7 +57,7 @@
     ]
   },
   "recommendations": {
-    "timestamp": "2026-05-03T08:40:40.612366",
+    "timestamp": "2026-05-04T14:40:10.268376",
     "critical_status": "CRITICAL: Win rate below 33% (worse than random). Stop trading.",
     "immediate_actions": [
       {
@@ -80,7 +80,9 @@
         "name": "Category Confidence Ceiling",
         "description": "Reduce confidence threshold for under-performing categories",
         "changes": {
-          "DISABLE_CATEGORIES": []
+          "DISABLE_CATEGORIES": [
+            "CRYPTO"
+          ]
         },
         "estimated_impact": "High: Cuts losing trades by category"
       },
@@ -102,26 +104,7 @@
         "estimated_impact": "Medium: Enables continuous improvement cycle"
       }
     ],
-    "user_approval_needed": [
-      {
-        "api": "ODDS_API_KEY",
-        "reason": "TheOdds API - Sports data for market enrichment. Free tier available: https://theoddsapi.com",
-        "cost_bearing": true,
-        "benefit": "Real-time sports data improves probability estimates for sports markets by 20-30%"
-      },
-      {
-        "api": "BRAVE_SEARCH_API_KEY",
-        "reason": "Brave Search API - Web search for market context. Paid only: https://api.search.brave.com",
-        "cost_bearing": true,
-        "benefit": "Recent news/data gives Claude better context, reduces outdated assumptions by 40%"
-      },
-      {
-        "api": "DISCORD_WEBHOOK_URL",
-        "reason": "Discord webhook for alerts (optional, free to set up). Setup instructions in docs.",
-        "cost_bearing": false,
-        "benefit": "Instant notifications of trades and alerts (monitoring only, no cost)"
-      }
-    ],
+    "user_approval_needed": [],
     "future_enhancements": [
       {
         "name": "Extended Thinking Confirmation",
@@ -139,16 +122,8 @@
     }
   },
   "api_setup": {
-    "pending": [
-      "ODDS_API_KEY",
-      "BRAVE_SEARCH_API_KEY",
-      "DISCORD_WEBHOOK_URL"
-    ],
-    "details": {
-      "ODDS_API_KEY": "TheOdds API - Sports data for market enrichment. Free tier available: https://theoddsapi.com",
-      "BRAVE_SEARCH_API_KEY": "Brave Search API - Web search for market context. Paid only: https://api.search.brave.com",
-      "DISCORD_WEBHOOK_URL": "Discord webhook for alerts (optional, free to set up). Setup instructions in docs."
-    }
+    "pending": [],
+    "details": {}
   },
-  "summary": "Trading System Health Report\nGenerated: 2026-05-03 08:40:40\n\nPerformance: 0-4 (0% WR) across 5 trades\nP&L: $-111.30 total\n\nStatus: CRITICAL: Win rate below 33% (worse than random). Stop trading.\n\n\ud83d\udd34 IMMEDIATE ACTIONS:\n  \u2022 DISABLE_AUTO_TRADING: Critical issues identified\n\n\u2705 FREE IMPROVEMENTS (auto-implement):\n  \u2022 Extreme Price Filter\n    Impact: Very High: Eliminates worst-performing 80% of trades\n  \u2022 Category Confidence Ceiling\n    Impact: High: Cuts losing trades by category\n  \u2022 Elite Wallet Veto\n    Impact: Medium: Prevents contrarian bets when smart money disagrees\n  \u2022 Calibration Feedback Loop\n    Impact: Medium: Enables continuous improvement cycle\n\n\u26a0\ufe0f API KEYS FOR HUMAN APPROVAL:\n  \u2022 ODDS_API_KEY (COSTS MONEY)\n    Benefit: Real-time sports data improves probability estimates for sports markets by 20-30%\n  \u2022 BRAVE_SEARCH_API_KEY (COSTS MONEY)\n    Benefit: Recent news/data gives Claude better context, reduces outdated assumptions by 40%\n  \u2022 DISCORD_WEBHOOK_URL (free)\n    Benefit: Instant notifications of trades and alerts (monitoring only, no cost)\n\n\ud83d\ude80 FUTURE ENHANCEMENTS:\n  \u2022 Extended Thinking Confirmation: Reduce false signals by 30-40%\n\nESTIMATED IMPACT WITH FREE IMPROVEMENTS:\n  From extreme price filter: +5-10% win rate\n  From category tuning: +3-8% win rate\n  Target: 0% \u2192 ~35-40% win rate before requiring paid APIs"
+  "summary": "Trading System Health Report\nGenerated: 2026-05-04 14:40:10\n\nPerformance: 0-4 (0% WR) across 5 trades\nP&L: $-111.30 total\n\nStatus: CRITICAL: Win rate below 33% (worse than random). Stop trading.\n\n\u2705 ALREADY IMPLEMENTED:\n  \u2022 Extreme Price Filter\n  \u2022 Elite Wallet Veto\n  \u2022 Calibration Feedback Loop\n\n\ud83d\udd34 IMMEDIATE ACTIONS:\n  \u2022 DISABLE_AUTO_TRADING: Critical issues identified\n\n\ud83d\udccb FREE IMPROVEMENTS (auto-implemented when ready):\n  \u2022 Extreme Price Filter [\u2705 Done]\n    Impact: Very High: Eliminates worst-performing 80% of trades\n  \u2022 Category Confidence Ceiling [\u23f3 Pending]\n    Impact: High: Cuts losing trades by category\n  \u2022 Elite Wallet Veto [\u2705 Done]\n    Impact: Medium: Prevents contrarian bets when smart money disagrees\n  \u2022 Calibration Feedback Loop [\u2705 Done]\n    Impact: Medium: Enables continuous improvement cycle\n\n\ud83d\ude80 FUTURE ENHANCEMENTS:\n  \u2022 Extended Thinking Confirmation: Reduce false signals by 30-40%\n\nPROJECTED IMPACT:\n  \u2022 Current: 0% win rate, $-111.30 PnL\n  \u2022 With implemented filters: +5-15% win rate potential\n  \u2022 With optional APIs: +10-30% improvement potential"
 }

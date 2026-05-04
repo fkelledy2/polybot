@@ -184,11 +184,22 @@ class SystemImprovementEngine:
 
         # 2. AUTO-IMPLEMENT: All free improvements
         free_impr = self.get_free_improvements()
+
+        # Find categories with enough data to confidently disable (≥3 trades, 0% win rate)
+        high_issues = analysis_results.get("high_issues", [])
+        bad_categories = [
+            i.category for i in high_issues
+            if i.category and getattr(i, "affected_trades", 0) >= 3
+        ]
+
         for impr in free_impr:
+            changes = dict(impr.config_changes)
+            if impr.name == "Category Confidence Ceiling" and bad_categories:
+                changes["DISABLE_CATEGORIES"] = bad_categories
             plan["auto_implement"].append({
                 "name": impr.name,
                 "description": impr.description,
-                "changes": impr.config_changes,
+                "changes": changes,
                 "estimated_impact": self._estimate_impact(impr),
             })
 

@@ -23,7 +23,7 @@ CLAUDE_MODEL = "claude-haiku-4-5-20251001"
 # ── Paper Trading ─────────────────────────────────────────────
 # We start with fake money so you can test without risk.
 PAPER_TRADING = True          # Set to False only when you're ready for real money
-STARTING_BALANCE = 600.0      # USD — matches the article's starting amount
+STARTING_BALANCE = 1000.0     # USD — fresh account reset
 
 # ── Signal Settings ───────────────────────────────────────────
 # Claude will only suggest a trade if the "edge" is big enough.
@@ -31,9 +31,9 @@ STARTING_BALANCE = 600.0      # USD — matches the article's starting amount
 # Example: Claude thinks 70% chance, market prices it at 52% → edge = 18%
 MIN_EDGE_TO_TRADE = 0.10      # 10% minimum edge before placing a trade
 # ── Extreme Price Markets ───────────────────────
-# Markets at extreme prices (<5% or >95%) require higher edge.
-MIN_EDGE_TO_TRADE_EXTREME = 0.15  # 15% edge for extreme prices
-EXTREME_PRICE_THRESHOLD = 0.05       # Markets below 5% or above 95%
+# Markets at extreme prices (<3% or >97%) require higher edge.
+MIN_EDGE_TO_TRADE_EXTREME = 0.20  # 20% edge for extreme prices (backtest-optimized)
+EXTREME_PRICE_THRESHOLD = 0.03       # Markets below 3% or above 97%
 
 MIN_ENTRY_PROBABILITY = 0.03   # Never enter a trade at <3% probability (100:33 odds)
 

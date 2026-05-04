@@ -14,9 +14,16 @@ from dataclasses import dataclass, field
 from typing import Optional
 from config import (
     ANTHROPIC_API_KEY, MIN_EDGE_TO_TRADE, MIN_ENTRY_PROBABILITY,
-    MAX_DAYS_TO_RESOLVE, MIN_DAYS_TO_RESOLVE, CLAUDE_MODEL
+    MAX_DAYS_TO_RESOLVE, MIN_DAYS_TO_RESOLVE, CLAUDE_MODEL,
+    MIN_EDGE_TO_TRADE_EXTREME, EXTREME_PRICE_THRESHOLD,
+    ENABLE_WALLET_VETO, WALLET_VETO_ON_EXTREME,
 )
-from signals.categorizer import get_category_context, CATEGORY_CONTEXT
+from signals.categorizer import get_category_context, detect_category, CATEGORY_CONTEXT
+
+try:
+    from config import DISABLED_CATEGORIES as _DISABLED_CATEGORIES
+except ImportError:
+    _DISABLED_CATEGORIES = []
 
 logger = logging.getLogger(__name__)
 
@@ -164,20 +171,42 @@ def _build_signal(market: dict, result: dict, wallet_signals: list[dict],
             entry_probability = 1.0 - yes_price
 
         wallet_alignment = False
+        has_wallet_data = False
         if wallet_signals:
             relevant = [s for s in wallet_signals if s.get("market_id") == market_id]
+            has_wallet_data = bool(relevant)
             wallet_alignment = any(s["outcome"] == direction for s in relevant)
 
         # S3-2: lower threshold for newly listed markets
         effective_min = MIN_EDGE_TO_TRADE * 0.8 if market.get("is_new_market") else MIN_EDGE_TO_TRADE
+
+        # Apply higher edge requirement for extreme-priced markets (<5% or >95%)
+        yes_price_is_extreme = (
+            yes_price < EXTREME_PRICE_THRESHOLD
+            or yes_price > (1 - EXTREME_PRICE_THRESHOLD)
+        )
+        if yes_price_is_extreme:
+            effective_min = max(effective_min, MIN_EDGE_TO_TRADE_EXTREME)
 
         should_trade = (
             abs_edge >= effective_min
             and confidence != "low"
             and entry_probability >= MIN_ENTRY_PROBABILITY
         )
-        if wallet_alignment and abs_edge >= MIN_EDGE_TO_TRADE * 0.8:
-            should_trade = should_trade and entry_probability >= MIN_ENTRY_PROBABILITY
+        # Wallet alignment can unlock borderline trades with edge >= 80% of minimum
+        if wallet_alignment and abs_edge >= MIN_EDGE_TO_TRADE * 0.8 and confidence != "low":
+            should_trade = entry_probability >= MIN_ENTRY_PROBABILITY
+
+        # Wallet veto: skip trade when elite wallets disagree
+        if has_wallet_data and not wallet_alignment:
+            if ENABLE_WALLET_VETO or (WALLET_VETO_ON_EXTREME and yes_price_is_extreme):
+                should_trade = False
+
+        # Category filter: skip if this category has been disabled by the analyzer
+        if _DISABLED_CATEGORIES:
+            market_cat = detect_category(market.get("question", ""))
+            if market_cat in _DISABLED_CATEGORIES:
+                should_trade = False
 
         return TradeSignal(
             market_id=market_id,
