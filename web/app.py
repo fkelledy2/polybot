@@ -168,6 +168,7 @@ def _get_stats() -> dict:
         "won_count":        won_count,
         "lost_count":       lost_count,
         "open_count":       int(open_count or 0),
+        "total_trades":     won_count + lost_count + int(open_count or 0),
         **shared_state,
     }
 

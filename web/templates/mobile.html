@@ -604,8 +604,8 @@
             if (pnl > 0) pnlEl.classList.add('positive');
             else if (pnl < 0) pnlEl.classList.add('negative');
 
-            // Win rate
-            const wr = (s.win_rate || 0) * 100;
+            // Win rate (API already returns 0-100)
+            const wr = s.win_rate || 0;
             document.getElementById('header-winrate').textContent = `${wr.toFixed(0)}%`;
 
             // Portfolio
