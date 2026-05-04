@@ -5,7 +5,7 @@
 
 import logging
 from datetime import datetime, date
-from config import DAILY_LOSS_LIMIT, STARTING_BALANCE
+from config import DAILY_LOSS_LIMIT, STARTING_BALANCE, MIN_EDGE_TO_TRADE
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,8 @@ class RiskManager:
 
     def check_daily_loss_limit(self, current_balance: float) -> bool:
         self._check_new_day(current_balance)
-        daily_loss = (self.day_start_balance - current_balance) / self.day_start_balance
+        daily_loss = ((self.day_start_balance - current_balance) / self.day_start_balance
+                      if self.day_start_balance > 0 else 0.0)
         if daily_loss >= DAILY_LOSS_LIMIT:
             if not self.is_halted:
                 logger.warning(
@@ -72,7 +73,7 @@ class RiskManager:
             return False, "Signal confidence is 'low' — skipping"
 
         abs_edge = abs(signal.edge)
-        if abs_edge < 0.08:
+        if abs_edge < MIN_EDGE_TO_TRADE:
             return False, f"Edge too small ({abs_edge:.1%})"
 
         # Cluster exposure check (S4-2)

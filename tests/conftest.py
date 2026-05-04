@@ -5,7 +5,6 @@
 
 import os
 import sqlite3
-import tempfile
 
 import pytest
 
@@ -16,24 +15,16 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-dummy")
 @pytest.fixture()
 def tmp_db(tmp_path, monkeypatch):
     """
-    Create a fresh temporary SQLite DB for each test and patch TRADES_DB
-    so paper_trader and tracker use it instead of the real trades.db.
+    Create a fresh temporary SQLite DB for each test.
+    Patches db._TRADES_DB — the single read point used by get_connection().
     """
     db_file = str(tmp_path / "test_trades.db")
     monkeypatch.setenv("TRADES_DB", db_file)
 
-    # Patch the config constant directly in every module that imports it
-    import config
-    monkeypatch.setattr(config, "TRADES_DB", db_file)
-
-    # Also patch inside already-imported modules
-    import execution.paper_trader as pt_mod
-    import backtest.tracker as tracker_mod
-    import web.app as web_mod
-
-    monkeypatch.setattr(pt_mod, "TRADES_DB", db_file)
-    monkeypatch.setattr(tracker_mod, "TRADES_DB", db_file)
-    monkeypatch.setattr(web_mod, "TRADES_DB", db_file)
+    import db as db_mod
+    monkeypatch.setattr(db_mod, "_TRADES_DB", db_file)
+    monkeypatch.setattr(db_mod, "IS_POSTGRES", False)
+    monkeypatch.setattr(db_mod, "placeholder", "?")
 
     return db_file
 

@@ -8,10 +8,13 @@ from unittest.mock import patch
 
 @pytest.fixture()
 def flask_client(tmp_db):
-    """Return a Flask test client wired to the temp DB."""
+    """Return an authenticated Flask test client wired to the temp DB."""
     from web.app import app
     app.config["TESTING"] = True
+    app.config["SECRET_KEY"] = "test-secret"
     with app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess["authenticated"] = True
         yield client
 
 
@@ -171,13 +174,33 @@ class TestPnlHistoryRoute:
         r = flask_client.get("/api/pnl-history")
         assert r.status_code == 200
 
-    def test_contains_balance_entries(self, flask_client, tmp_db, minimal_signal):
+    def test_empty_when_no_closed_trades(self, flask_client):
+        """PnL history is empty with no closed trades — correct for cumulative approach."""
+        r = flask_client.get("/api/pnl-history")
+        data = json.loads(r.data)
+        assert data == []
+
+    def test_contains_entry_after_closed_trade(self, flask_client, tmp_db, minimal_signal):
         from execution.paper_trader import PaperTrader
         pt = PaperTrader()
         pt.place_trade(minimal_signal)
+        pt.close_trade(minimal_signal.market_id, resolved_yes=True)
 
         r = flask_client.get("/api/pnl-history")
         data = json.loads(r.data)
         assert len(data) >= 1
         assert "t" in data[0]
         assert "b" in data[0]
+
+    def test_pnl_history_cumulative_after_win(self, flask_client, tmp_db, minimal_signal):
+        from execution.paper_trader import PaperTrader
+        from config import STARTING_BALANCE
+        pt = PaperTrader()
+        trade = pt.place_trade(minimal_signal)
+        pt.close_trade(minimal_signal.market_id, resolved_yes=True)
+
+        r = flask_client.get("/api/pnl-history")
+        data = json.loads(r.data)
+        assert len(data) == 1
+        # After a win, cumulative balance should be above starting balance
+        assert data[0]["b"] > STARTING_BALANCE

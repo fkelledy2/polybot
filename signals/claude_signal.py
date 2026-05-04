@@ -146,6 +146,9 @@ def _build_signal(market: dict, result: dict, wallet_signals: list[dict],
         yes_price = market["yes"]
 
         claude_prob = float(result["yes_probability"])
+        # Clamp before any arithmetic — Anthropic tool schema says [0.01, 0.99]
+        # but downstream code must not trust the model to honour it.
+        claude_prob = max(0.01, min(0.99, claude_prob))
 
         # S3-1: apply per-category calibration correction
         correction = _get_calibration_correction(market.get("question", ""), scan_count)

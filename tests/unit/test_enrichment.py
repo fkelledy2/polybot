@@ -236,21 +236,29 @@ def test_macro_returns_empty_on_failure():
 # News enricher (mocked HTTP)
 # ─────────────────────────────────────────────────────────────
 
-SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
+def _make_sample_rss(hours_ago: int = 2) -> str:
+    """Generate RSS with pubDates that are hours_ago hours in the past."""
+    from datetime import datetime, timezone, timedelta
+    import email.utils
+    def ts(offset_h):
+        dt = datetime.now(tz=timezone.utc) - timedelta(hours=offset_h)
+        return email.utils.format_datetime(dt)
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
     <title>Test Feed</title>
     <item>
       <title>Bitcoin ETF inflows hit record $400M this week</title>
-      <pubDate>Thu, 10 Apr 2026 10:00:00 +0000</pubDate>
+      <pubDate>{ts(hours_ago)}</pubDate>
     </item>
     <item>
       <title>Ethereum staking yields rise amid DeFi boom</title>
-      <pubDate>Thu, 10 Apr 2026 08:00:00 +0000</pubDate>
+      <pubDate>{ts(hours_ago + 2)}</pubDate>
     </item>
     <item>
       <title>Arsenal wins Premier League title in dramatic fashion</title>
-      <pubDate>Thu, 10 Apr 2026 06:00:00 +0000</pubDate>
+      <pubDate>{ts(hours_ago + 4)}</pubDate>
     </item>
   </channel>
 </rss>"""
@@ -262,8 +270,9 @@ def test_news_returns_relevant_headlines():
     _cache._store.clear()
 
     from data.enrichment.news import CATEGORY_FEEDS
+    rss_body = _make_sample_rss(hours_ago=2).encode()
     for url in CATEGORY_FEEDS.get("CRYPTO", []):
-        responses_lib.add(responses_lib.GET, url, body=SAMPLE_RSS.encode(), status=200)
+        responses_lib.add(responses_lib.GET, url, body=rss_body, status=200)
 
     import requests
     ctx = news.get_context("CRYPTO", "Will Bitcoin ETF be approved?", requests.Session())

@@ -153,7 +153,10 @@ class PaperTrader:
                         f"b={b:.2f} conf={confidence}({conf_mult}x) → ${size:.2f}"
                     )
                     return size
-        return round(self.balance * MAX_POSITION_PCT * conf_mult, 2)
+        # Fallback: Kelly undefined or zero — use hard cap without confidence penalty.
+        # conf_mult is an adjustment on positive Kelly, not an additional restriction
+        # when we already can't compute a meaningful fraction.
+        return round(self.balance * MAX_POSITION_PCT, 2)
 
     def place_trade(self, signal) -> Optional[Trade]:
         if signal.market_id in self.open_positions:
