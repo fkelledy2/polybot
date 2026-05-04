@@ -86,6 +86,7 @@ BRAVE_SEARCH_API_KEY = os.getenv("BRAVE_SEARCH_API_KEY", "")   # S2-1 web search
 ODDS_API_KEY         = os.getenv("ODDS_API_KEY",         "")   # S2-4 sports lines
 DISCORD_WEBHOOK_URL  = os.getenv("DISCORD_WEBHOOK_URL",  "")   # S3-4 notifications
 DATABASE_URL         = os.getenv("DATABASE_URL",         "")   # S2-3 Heroku Postgres
+DUNE_API_KEY         = os.getenv("DUNE_API_KEY",         "")   # Backtest: real prices
 
 # ── Calibration Feedback ───────────────────────
 # Track probability estimates vs actual resolutions.

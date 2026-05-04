@@ -106,6 +106,7 @@ class CachedEstimate:
     reasoning:          str
     input_tokens:       int = 0
     output_tokens:      int = 0
+    real_entry_price:   Optional[float] = None  # set when sourced from Dune
 
 
 @dataclass
@@ -306,8 +307,16 @@ def fetch_and_estimate(
     n_markets: int,
     cost_limit: float,
     model: str,
+    dune_key: str = "",
+    lookback_days: int = 180,
 ) -> tuple[list[CachedEstimate], float]:
-    """Fetch markets + call Claude once. Returns (estimates, actual_cost)."""
+    """Fetch markets + call Claude once. Returns (estimates, actual_cost).
+
+    If dune_key is provided, fetches real historical entry prices from Dune
+    Analytics (polymarket_polygon schema) instead of Polymarket's gamma API.
+    Dune markets use actual avg YES price 3-14 days before resolution, giving
+    a single realistic entry price per market instead of 7 synthetic ones.
+    """
     import anthropic
     from config import ANTHROPIC_API_KEY
 
@@ -318,12 +327,28 @@ def fetch_and_estimate(
             f"Reduce --markets or raise --cost-limit."
         )
 
-    logger.info(f"Fetching {n_markets} resolved markets…")
-    raw_markets = fetch_resolved_markets(limit=n_markets * 4)
-    if not raw_markets:
-        raise RuntimeError("No resolved markets returned from Polymarket API.")
-    markets = raw_markets[:n_markets]
-    logger.info(f"Fetched {len(markets)} markets.")
+    # ── Market sourcing: Dune (real prices) vs gamma (synthetic) ──
+    if dune_key:
+        from backtest.dune_fetcher import DuneFetcher
+        dune = DuneFetcher(dune_key)
+        markets = dune.fetch_resolved_markets(
+            lookback_days=lookback_days, limit=n_markets
+        )
+        use_real_prices = True
+        if not markets:
+            raise RuntimeError("Dune returned 0 markets. Check API key or lookback window.")
+    else:
+        logger.info(f"Fetching {n_markets} resolved markets from Polymarket gamma API…")
+        raw_markets = fetch_resolved_markets(limit=n_markets * 4)
+        if not raw_markets:
+            raise RuntimeError("No resolved markets returned from Polymarket API.")
+        markets = raw_markets[:n_markets]
+        use_real_prices = False
+
+    logger.info(
+        f"Fetched {len(markets)} markets "
+        f"({'Dune — real prices' if use_real_prices else 'gamma — synthetic prices'})."
+    )
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -405,6 +430,7 @@ def fetch_and_estimate(
                     reasoning=rsn,
                     input_tokens=per_batch_tokens,
                     output_tokens=out_tok // max(len(batch), 1),
+                    real_entry_price=market.last_price if use_real_prices else None,
                 ))
 
         except json.JSONDecodeError as e:
@@ -427,13 +453,18 @@ def load_or_fetch(
     model: str,
     force_refresh: bool,
     cache_path: str,
+    dune_key: str = "",
+    lookback_days: int = 180,
 ) -> tuple[list[CachedEstimate], float]:
     if not force_refresh:
         cached = load_cache(cache_path)
         if cached:
             return cached, 0.0
 
-    estimates, cost = fetch_and_estimate(n_markets, cost_limit, model)
+    estimates, cost = fetch_and_estimate(
+        n_markets, cost_limit, model,
+        dune_key=dune_key, lookback_days=lookback_days,
+    )
     if estimates:
         save_cache(estimates, cache_path)
     return estimates, cost
@@ -520,8 +551,16 @@ def simulate_config(estimates: list[CachedEstimate], cfg: OptimizerConfig) -> Si
 
         effective_min = cfg.min_edge_extreme if is_extreme else cfg.min_edge
 
-        # Test at each synthetic entry price
-        for entry_price in SYNTHETIC_PRICES:
+        # Use real entry price from Dune if available; otherwise test synthetics.
+        # Real prices: one trade per market (accurate).
+        # Synthetic prices: seven trades per market (approximate, gamma-sourced).
+        prices_to_test = (
+            [est.real_entry_price]
+            if est.real_entry_price is not None
+            else SYNTHETIC_PRICES
+        )
+
+        for entry_price in prices_to_test:
             edge      = est.claude_probability - entry_price
             direction = "YES" if edge >= 0 else "NO"
             abs_edge  = abs(edge)
@@ -541,7 +580,7 @@ def simulate_config(estimates: list[CachedEstimate], cfg: OptimizerConfig) -> Si
             stats.wins      += int(correct)
             stats.total_pnl += pnl
 
-            # Segment tracking (all inside the per-price loop)
+            # Segment tracking
             _seg_add(stats.by_edge,     _edge_bucket(abs_edge),                    correct, pnl)
             _seg_add(stats.by_category, est.category,                              correct, pnl)
             _seg_add(stats.by_extreme,  "extreme" if is_extreme else "normal",     correct, pnl)
@@ -991,9 +1030,19 @@ Examples:
                         help="Re-fetch markets and re-call Claude even if cache exists")
     parser.add_argument("--cache",         type=str,   default=DEFAULT_CACHE,
                         help=f"Cache file path (default: {DEFAULT_CACHE})")
+    parser.add_argument("--dune",          action="store_true",
+                        help="Use Dune Analytics for real historical entry prices "
+                             "(requires DUNE_API_KEY in .env)")
+    parser.add_argument("--lookback",      type=int,   default=180,
+                        help="Days of market history to include when using --dune (default: 180)")
     args = parser.parse_args()
 
     from config import CLAUDE_MODEL
+    import os
+    dune_key = os.getenv("DUNE_API_KEY", "") if args.dune else ""
+    if args.dune and not dune_key:
+        print("\n  ERROR: --dune requires DUNE_API_KEY in .env")
+        sys.exit(1)
 
     t0 = time.time()
 
@@ -1005,9 +1054,10 @@ Examples:
     print(f"  Iterations:   {args.iterations}")
     print(f"  Delta:        {args.delta}")
     print(f"  Mode:         {'APPLY' if args.apply else 'DRY RUN'}")
+    print(f"  Data source:  {'Dune Analytics (real prices, ' + str(args.lookback) + 'd lookback)' if dune_key else 'Polymarket gamma API (synthetic prices)'}")
     print(f"  Cache:        {args.cache}")
     preflight = estimate_preflight_cost(args.markets, CLAUDE_MODEL)
-    print(f"  Est. cost:    ${preflight:.3f} (if cache miss, model={CLAUDE_MODEL})")
+    print(f"  Est. cost:    ${preflight:.3f} (Claude, if cache miss, model={CLAUDE_MODEL})")
     print()
 
     # Load current config as baseline
@@ -1022,6 +1072,8 @@ Examples:
             model=CLAUDE_MODEL,
             force_refresh=args.force_refresh,
             cache_path=args.cache,
+            dune_key=dune_key,
+            lookback_days=args.lookback,
         )
     except RuntimeError as e:
         print(f"\n  ERROR: {e}")
