@@ -273,11 +273,21 @@ def api_pnl_history():
     try:
         conn = _db()
         c = db.get_cursor(conn)
-        # Fetch all balance history — chart will display all available data
-        # This gives a complete view of portfolio changes over time
-        c.execute("SELECT timestamp, balance FROM balance_log ORDER BY id")
-        rows = [{"t": r["timestamp"], "b": round(r["balance"], 2)} for r in c.fetchall()]
+        # Build cumulative realized PnL from closed trades so the chart
+        # shows monotonic performance rather than cash-balance oscillation.
+        c.execute("""
+            SELECT COALESCE(closed_at, timestamp) AS t, pnl
+            FROM trades
+            WHERE status IN ('won', 'lost') AND pnl IS NOT NULL
+            ORDER BY COALESCE(closed_at, timestamp) ASC
+        """)
+        rows_raw = c.fetchall()
         conn.close()
+        cumulative = STARTING_BALANCE
+        rows = []
+        for r in rows_raw:
+            cumulative = round(cumulative + r["pnl"], 2)
+            rows.append({"t": r["t"], "b": cumulative})
     except Exception:
         rows = []
     return jsonify(rows)

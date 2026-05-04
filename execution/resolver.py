@@ -93,16 +93,17 @@ def resolve_open_positions(paper_trader) -> int:
     return closed
 
 
-def check_stop_losses(paper_trader, markets: list[dict]) -> int:
+def check_stop_losses(paper_trader, markets: list[dict]) -> list[str]:
     """
     Close open positions where the market has moved 2× entry_edge against us (S4-3).
     Uses current market prices from the markets list.
+    Returns list of market_ids that were stopped out.
     """
     if not paper_trader.open_positions or not markets:
-        return 0
+        return []
 
     price_map = {m["market_id"]: m.get("yes") for m in markets if m.get("market_id")}
-    closed = 0
+    stopped_ids: list[str] = []
 
     for market_id, trade in list(paper_trader.open_positions.items()):
         current_yes = price_map.get(market_id)
@@ -133,7 +134,7 @@ def check_stop_losses(paper_trader, markets: list[dict]) -> int:
                 exit_price=current_yes if trade.direction == "YES" else (1.0 - current_yes),
             )
             if result:
-                closed += 1
+                stopped_ids.append(market_id)
                 logger.warning(
                     f"🛑 Stop-loss: closing {trade.direction} "
                     f"'{trade.question[:40]}…' — "
@@ -141,4 +142,4 @@ def check_stop_losses(paper_trader, markets: list[dict]) -> int:
                     f"(threshold: {2*abs_edge:.0%})"
                 )
 
-    return closed
+    return stopped_ids

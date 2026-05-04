@@ -82,6 +82,9 @@ def main():
 
     scan_count  = 0
     batch_id_pending: str | None = None
+    # market_id → scan number when cooldown expires (prevent re-entry after stop-loss)
+    _stop_loss_cooldown: dict[str, int] = {}
+    STOP_LOSS_COOLDOWN_SCANS = 10  # ~10 min at 60s/scan
 
     while True:
         scan_count += 1
@@ -142,6 +145,14 @@ def main():
                 m["yes"] = cached
                 m["no"]  = 1.0 - cached
 
+        # Exclude markets on stop-loss cooldown from analysis
+        expired = [mid for mid, until in _stop_loss_cooldown.items() if scan_count >= until]
+        for mid in expired:
+            del _stop_loss_cooldown[mid]
+        if _stop_loss_cooldown:
+            markets_parsed = [m for m in markets_parsed if m["market_id"] not in _stop_loss_cooldown]
+            logger.info(f"Cooldown active for {len(_stop_loss_cooldown)} market(s): {list(_stop_loss_cooldown)}")
+
         # S4-2: cluster markets for correlation-aware risk
         clusters = cluster_markets(markets_parsed)
         risk_manager.update_clusters(clusters)
@@ -186,9 +197,11 @@ def main():
 
         # ── 5. Stop-losses and position resolution ────────────
         # S4-3: dynamic stop-loss (before new trades)
-        stopped = check_stop_losses(paper_trader, markets_parsed)
-        if stopped:
-            notify(f"🛑 Stop-loss triggered: closed {stopped} position(s)")
+        stopped_ids = check_stop_losses(paper_trader, markets_parsed)
+        if stopped_ids:
+            notify(f"🛑 Stop-loss triggered: closed {len(stopped_ids)} position(s)")
+            for mid in stopped_ids:
+                _stop_loss_cooldown[mid] = scan_count + STOP_LOSS_COOLDOWN_SCANS
             shared_state.update({
                 "balance":         paper_trader.balance,
                 "portfolio_value": paper_trader.portfolio_value,
