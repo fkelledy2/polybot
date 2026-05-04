@@ -22,6 +22,7 @@ _NEXT_DATA_TMPL  = "https://polymarket.com/_next/data/{build_id}/en/leaderboard/
 @dataclass
 class WalletProfile:
     address: str
+    name: str = ""
     total_trades: int = 0
     winning_trades: int = 0
     total_pnl_usd: float = 0.0
@@ -160,9 +161,14 @@ class WalletTracker:
             if pnl <= 0:
                 continue
 
-            name = t.get("name") or t.get("pseudonym") or addr[:10]
+            raw_name = t.get("name") or t.get("pseudonym") or ""
+            # Skip UUID-style auto-generated pseudonyms (0x...-timestamp pattern)
+            if raw_name.startswith("0x") and "-" in raw_name:
+                raw_name = ""
+            name = raw_name or f"{addr[:6]}...{addr[-4:]}"
             profile = WalletProfile(
                 address=addr,
+                name=name,
                 total_trades=100,   # leaderboard wallets have many trades by definition
                 winning_trades=60,  # 60% assumed for leaderboard top-profit traders
                 total_pnl_usd=pnl,
