@@ -213,14 +213,48 @@ class ScheduledAnalysisAgent:
         return result
 
     def _save_report(self):
-        """Save report to JSON file."""
+        """Save report to Postgres (production) and JSON file (local)."""
+        # Always write the local file
         try:
             Path(self.output_file).parent.mkdir(parents=True, exist_ok=True)
             with open(self.output_file, "w") as f:
                 json.dump(self.report, f, indent=2, default=str)
             logger.info(f"Report saved to {self.output_file}")
         except Exception as e:
-            logger.error(f"Failed to save report: {e}")
+            logger.error(f"Failed to save report to file: {e}")
+
+        # Also persist to Postgres when running in production
+        import os
+        database_url = os.getenv("DATABASE_URL", "")
+        if not database_url:
+            return
+        try:
+            import psycopg2
+            conn = psycopg2.connect(database_url, sslmode="require")
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS analysis_reports (
+                    id      SERIAL PRIMARY KEY,
+                    saved_at TIMESTAMPTZ DEFAULT NOW(),
+                    report  JSONB NOT NULL
+                )
+            """)
+            cur.execute(
+                "INSERT INTO analysis_reports (report) VALUES (%s)",
+                (json.dumps(self.report, default=str),),
+            )
+            # Keep only the last 30 reports
+            cur.execute("""
+                DELETE FROM analysis_reports
+                WHERE id NOT IN (
+                    SELECT id FROM analysis_reports ORDER BY saved_at DESC LIMIT 30
+                )
+            """)
+            conn.commit()
+            conn.close()
+            logger.info("Report saved to Postgres")
+        except Exception as e:
+            logger.warning(f"Failed to save report to Postgres: {e}")
 
     def _send_discord_notification(self):
         """Send analysis summary to Discord if webhook is configured."""

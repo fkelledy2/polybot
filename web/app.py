@@ -373,14 +373,29 @@ def api_costs():
 @app.route("/.claude/analysis_report.json")
 @login_required
 def api_analysis_report():
-    """Return the latest trading system analysis report."""
+    """Return the latest trading system analysis report (Postgres or file fallback)."""
+    # Try Postgres first (populated by Heroku Scheduler)
+    try:
+        conn = _db()
+        c = db.get_cursor(conn)
+        c.execute(
+            "SELECT report FROM analysis_reports ORDER BY saved_at DESC LIMIT 1"
+        )
+        row = c.fetchone()
+        conn.close()
+        if row:
+            report = row["report"] if isinstance(row["report"], dict) else json.loads(row["report"])
+            return jsonify(report)
+    except Exception:
+        pass  # Table may not exist yet; fall through to file
+
+    # Fall back to committed JSON file
     try:
         report_path = os.path.join(os.getcwd(), ".claude", "analysis_report.json")
         if os.path.exists(report_path):
             with open(report_path, "r") as f:
                 return jsonify(json.load(f))
-        else:
-            return jsonify({"error": "No analysis report available"}), 404
+        return jsonify({"error": "No analysis report available"}), 404
     except Exception as e:
         logger.error(f"Error loading analysis report: {e}")
         return jsonify({"error": str(e)}), 500
