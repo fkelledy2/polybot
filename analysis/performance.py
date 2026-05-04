@@ -109,6 +109,8 @@ class PerformanceAnalyzer:
                 "total_trades": 0,
                 "closed_trades": 0,
                 "open_trades": 0,
+                "wins": 0,
+                "losses": 0,
                 "win_rate": 0,
                 "total_pnl": 0,
                 "avg_pnl_per_trade": 0,
