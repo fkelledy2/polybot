@@ -38,48 +38,42 @@ DUNE_API_BASE = "https://api.dune.com/api/v1"
 
 _SQL = """
 WITH resolved AS (
-    SELECT
-        condition_id,
-        question,
-        outcome,
-        resolved_on_timestamp,
-        market_end_time,
-        market_start_time
+    SELECT condition_id, question, outcome, resolved_on_timestamp, market_end_time
     FROM polymarket_polygon.market_details
     WHERE token_outcome = 'Yes'
-      AND outcome       IN ('yes', 'no')
+      AND outcome IN ('yes', 'no')
       AND resolved_on_timestamp >= NOW() - INTERVAL '{lookback_days}' DAY
       AND resolved_on_timestamp IS NOT NULL
 ),
 entry_prices AS (
     SELECT
-        t.condition_id,
-        AVG(t.price)            AS avg_yes_price,
-        APPROX_PERCENTILE(t.price, 0.5) AS median_yes_price,
-        SUM(t.amount)           AS volume_usd,
-        COUNT(*)                AS trade_count
+        LOWER('0x' || to_hex(t.condition_id)) AS condition_id,
+        AVG(t.price)                           AS avg_yes_price,
+        APPROX_PERCENTILE(t.price, 0.5)        AS median_yes_price,
+        SUM(t.amount)                          AS volume_usd,
+        COUNT(*)                               AS trade_count
     FROM polymarket_polygon.market_trades t
-    INNER JOIN resolved r ON t.condition_id = r.condition_id
+    INNER JOIN resolved r
+           ON LOWER('0x' || to_hex(t.condition_id)) = LOWER(r.condition_id)
     WHERE t.token_outcome = 'Yes'
       AND t.block_month  >= DATE_TRUNC('month', NOW() - INTERVAL '{lookback_days}' DAY)
       AND t.block_time   >= r.resolved_on_timestamp - INTERVAL '14' DAY
       AND t.block_time   <  r.resolved_on_timestamp - INTERVAL '3'  DAY
-    GROUP BY t.condition_id
+    GROUP BY 1
     HAVING COUNT(*) >= 5
        AND AVG(t.price) BETWEEN 0.03 AND 0.97
 )
 SELECT
     r.condition_id,
     r.question,
-    (r.outcome = 'yes')     AS resolved_yes,
+    (r.outcome = 'yes') AS resolved_yes,
     r.market_end_time,
-    r.market_start_time,
-    ep.avg_yes_price        AS entry_price,
+    ep.avg_yes_price    AS entry_price,
     ep.median_yes_price,
     ep.volume_usd,
     ep.trade_count
 FROM resolved r
-JOIN entry_prices ep ON r.condition_id = ep.condition_id
+JOIN entry_prices ep ON LOWER(r.condition_id) = ep.condition_id
 ORDER BY ep.volume_usd DESC
 LIMIT {limit}
 """
@@ -96,10 +90,11 @@ class DuneFetcher:
         """Submit SQL. Returns execution_id."""
         resp = self._session.post(
             f"{DUNE_API_BASE}/sql/execute",
-            json={"query_sql": sql, "performance": "medium"},
+            json={"sql": sql},
             timeout=30,
         )
-        resp.raise_for_status()
+        if not resp.ok:
+            raise RuntimeError(f"Dune execute failed {resp.status_code}: {resp.text[:300]}")
         return resp.json()["execution_id"]
 
     def _poll(self, exec_id: str, max_wait: int = 300) -> list[dict]:
@@ -108,10 +103,11 @@ class DuneFetcher:
         delay = 5
         while time.time() < deadline:
             resp = self._session.get(
-                f"{DUNE_API_BASE}/executions/{exec_id}/results",
+                f"{DUNE_API_BASE}/execution/{exec_id}/results",
                 timeout=30,
             )
-            resp.raise_for_status()
+            if not resp.ok:
+                raise RuntimeError(f"Dune poll failed {resp.status_code}: {resp.text[:300]}")
             data = resp.json()
             state = data.get("state", "")
 
