@@ -177,7 +177,7 @@
 
     #bottom-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr 1fr;
+      grid-template-columns: 1fr 1fr 2fr 0.5fr;
       grid-template-rows: 2fr 1fr;
       gap: 1px;
       background: var(--border);
@@ -1516,6 +1516,24 @@ function buildTimelineDatasets(trades) {
       };
     });
 
+  // Vertical dashed lines at resolution date for open trades
+  const resolveLines = trades
+    .filter(t => t.status === 'open' && t.end_date)
+    .map(t => {
+      const endMs = new Date(t.end_date).getTime();
+      return {
+        type: 'line',
+        data: [{ x: endMs, y: 0 }, { x: endMs, y: 1 }],
+        borderColor: 'rgba(240,192,64,0.35)',
+        borderWidth: 1,
+        borderDash: [4, 4],
+        pointRadius: 0,
+        tension: 0,
+        showLine: true,
+        order: 3,
+      };
+    });
+
   // Point datasets grouped by status (won/lost/open)
   const groups = { won: [], lost: [], open: [] };
   for (const t of trades) {
@@ -1553,7 +1571,7 @@ function buildTimelineDatasets(trades) {
     };
   });
 
-  return [...lineDatasets, ...pointDatasets];
+  return [...lineDatasets, ...resolveLines, ...pointDatasets];
 }
 
 async function refreshChart() {

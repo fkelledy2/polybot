@@ -87,6 +87,56 @@ def install_log_handler() -> None:
     logging.getLogger().addHandler(handler)
 
 
+def _init_scan_cache() -> None:
+    """Create the scan_cache table if it doesn't exist and pre-load last scan."""
+    global recent_signals, recent_markets
+    try:
+        conn = db.get_connection()
+        c = db.get_cursor(conn)
+        c.execute(db.adapt_schema("""
+            CREATE TABLE IF NOT EXISTS scan_cache (
+                key  TEXT PRIMARY KEY,
+                value TEXT,
+                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        conn.commit()
+        # Pre-load last signals and markets so panels aren't empty after restart
+        c.execute("SELECT key, value FROM scan_cache WHERE key IN ('signals','markets')")
+        rows = {r["key"]: r["value"] for r in c.fetchall()}
+        conn.close()
+        if "signals" in rows:
+            recent_signals = json.loads(rows["signals"])
+        if "markets" in rows:
+            recent_markets = json.loads(rows["markets"])
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"scan_cache init failed: {e}")
+
+
+def _save_scan_cache(signals: list, markets: list) -> None:
+    """Persist signals and markets to DB so they survive restarts."""
+    try:
+        conn = db.get_connection()
+        c = db.get_cursor(conn)
+        p = db.placeholder
+        if db.IS_POSTGRES:
+            c.execute(f"""
+                INSERT INTO scan_cache (key, value, saved_at)
+                VALUES ('signals', {p}, NOW()), ('markets', {p}, NOW())
+                ON CONFLICT (key) DO UPDATE SET value=EXCLUDED.value, saved_at=EXCLUDED.saved_at
+            """, (json.dumps(signals), json.dumps(markets)))
+        else:
+            for key, val in [("signals", signals), ("markets", markets)]:
+                c.execute(
+                    "INSERT OR REPLACE INTO scan_cache (key, value) VALUES (?, ?)",
+                    (key, json.dumps(val))
+                )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"scan_cache save failed: {e}")
+
+
 def update_signals(all_signals: list, markets: list, wallets_tracked: int,
                    elite_wallets: list = None) -> None:
     """Called by main.py each scan to push latest signal data."""
@@ -106,6 +156,9 @@ def update_signals(all_signals: list, markets: list, wallets_tracked: int,
                 }
                 for w in elite_wallets
             ]
+    # Persist to DB outside the lock (non-blocking for callers)
+    if all_signals:
+        _save_scan_cache(recent_signals, recent_markets)
 
 
 def _signal_to_dict(signal, markets: list) -> dict:
@@ -337,7 +390,7 @@ def api_trade_timeline():
         conn = _db()
         c = db.get_cursor(conn)
         c.execute("""
-            SELECT id, question, direction, entry_price, size_usd,
+            SELECT id, market_id, question, direction, entry_price, size_usd,
                    timestamp, closed_at, status, pnl
             FROM trades ORDER BY timestamp ASC
         """)
@@ -345,6 +398,11 @@ def api_trade_timeline():
         conn.close()
     except Exception:
         rows = []
+    # Enrich open trades with end_date from the most recent market scan
+    markets_by_id = {m.get("market_id"): m for m in recent_markets}
+    for row in rows:
+        market = markets_by_id.get(row.get("market_id"))
+        row["end_date"] = market.get("end_date") if market else None
     return jsonify(rows)
 
 
@@ -460,5 +518,6 @@ def webhook_deploy():
 
 
 def run_server(host: str = "0.0.0.0", port: int = None) -> None:
+    _init_scan_cache()
     port = port or int(os.environ.get("PORT", 8080))
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)
