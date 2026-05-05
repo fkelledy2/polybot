@@ -1595,7 +1595,40 @@ function buildTimelineDatasets(trades) {
     };
   });
 
-  return [...lineDatasets, ...openToEndLines, ...resolveLines, ...pointDatasets];
+  // Outcome dots at the resolution point (closed_at) for won/lost trades
+  const outcomeDotData = trades
+    .filter(t => (t.status === 'won' || t.status === 'lost') && t.closed_at)
+    .map(t => ({
+      x:           new Date(t.closed_at).getTime(),
+      y:           t.entry_price,
+      r:           7,
+      question:    t.question,
+      direction:   t.direction,
+      entry_price: t.entry_price,
+      size_usd:    t.size_usd,
+      status:      t.status,
+      pnl:         t.pnl || 0,
+      openedAt:    t.timestamp,
+      closedAt:    t.closed_at,
+      end_date:    t.end_date || null,
+    }));
+
+  const outcomeDatasets = ['won', 'lost'].map(status => {
+    const col = TIMELINE_COLORS[status];
+    const pts = outcomeDotData.filter(p => p.status === status);
+    return {
+      type: 'scatter',
+      data: pts,
+      backgroundColor: col.fill,
+      borderColor:     col.border,
+      borderWidth:     2,
+      pointRadius:     pts.map(() => 7),
+      pointHoverRadius:pts.map(() => 10),
+      order: 1,
+    };
+  });
+
+  return [...lineDatasets, ...openToEndLines, ...resolveLines, ...pointDatasets, ...outcomeDatasets];
 }
 
 async function refreshChart() {
