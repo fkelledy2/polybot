@@ -391,18 +391,20 @@ def api_trade_timeline():
         c = db.get_cursor(conn)
         c.execute("""
             SELECT id, market_id, question, direction, entry_price, size_usd,
-                   timestamp, closed_at, status, pnl
+                   timestamp, closed_at, status, pnl,
+                   COALESCE(end_date, NULL) AS end_date
             FROM trades ORDER BY timestamp ASC
         """)
         rows = [dict(r) for r in c.fetchall()]
         conn.close()
     except Exception:
         rows = []
-    # Enrich open trades with end_date from the most recent market scan
+    # For rows without a stored end_date, fall back to the live market scan
     markets_by_id = {m.get("market_id"): m for m in recent_markets}
     for row in rows:
-        market = markets_by_id.get(row.get("market_id"))
-        row["end_date"] = market.get("end_date") if market else None
+        if not row.get("end_date"):
+            market = markets_by_id.get(row.get("market_id"))
+            row["end_date"] = market.get("end_date") if market else None
     return jsonify(rows)
 
 

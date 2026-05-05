@@ -234,7 +234,8 @@ def main():
                 portfolio_value=paper_trader.portfolio_value,
             )
             if ok:
-                trade = paper_trader.place_trade(signal)
+                market_data = next((m for m in markets_parsed if m["market_id"] == signal.market_id), {})
+                trade = paper_trader.place_trade(signal, end_date=market_data.get("end_date"))
                 if trade:
                     new_trades += 1
                     notify(

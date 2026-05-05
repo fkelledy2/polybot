@@ -64,6 +64,7 @@ class Trade:
     pnl: float = 0.0
     reasoning: str = ""
     edge: float = 0.0
+    end_date: Optional[str] = None
     trade_id: Optional[int] = None
 
 
@@ -84,6 +85,7 @@ class PaperTrader:
         for col_sql in [
             "ALTER TABLE trades ADD COLUMN closed_at TEXT DEFAULT NULL",
             "ALTER TABLE trades ADD COLUMN edge REAL DEFAULT NULL",
+            "ALTER TABLE trades ADD COLUMN end_date TEXT DEFAULT NULL",
         ]:
             db.safe_alter(conn, col_sql)
         conn.close()
@@ -158,7 +160,7 @@ class PaperTrader:
         # when we already can't compute a meaningful fraction.
         return round(self.balance * MAX_POSITION_PCT, 2)
 
-    def place_trade(self, signal) -> Optional[Trade]:
+    def place_trade(self, signal, end_date: str = None) -> Optional[Trade]:
         if signal.market_id in self.open_positions:
             return None
 
@@ -193,6 +195,7 @@ class PaperTrader:
             timestamp=datetime.now().isoformat(),
             reasoning=signal.reasoning,
             edge=signal.edge,
+            end_date=end_date,
         )
 
         self.balance -= size_usd
@@ -203,14 +206,14 @@ class PaperTrader:
         _insert_vals = (
             trade.market_id, trade.question, trade.direction,
             trade.entry_price, trade.size_usd, trade.shares,
-            trade.timestamp, trade.reasoning, trade.edge,
+            trade.timestamp, trade.reasoning, trade.edge, trade.end_date,
         )
         if db.IS_POSTGRES:
             c.execute(f"""
                 INSERT INTO trades
                 (market_id, question, direction, entry_price, size_usd,
-                 shares, timestamp, status, reasoning, edge)
-                VALUES ({_ph},{_ph},{_ph},{_ph},{_ph},{_ph},{_ph},'open',{_ph},{_ph})
+                 shares, timestamp, status, reasoning, edge, end_date)
+                VALUES ({_ph},{_ph},{_ph},{_ph},{_ph},{_ph},{_ph},'open',{_ph},{_ph},{_ph})
                 RETURNING id
             """, _insert_vals)
             trade.trade_id = c.fetchone()["id"]
@@ -218,8 +221,8 @@ class PaperTrader:
             c.execute(f"""
                 INSERT INTO trades
                 (market_id, question, direction, entry_price, size_usd,
-                 shares, timestamp, status, reasoning, edge)
-                VALUES ({_ph},{_ph},{_ph},{_ph},{_ph},{_ph},{_ph},'open',{_ph},{_ph})
+                 shares, timestamp, status, reasoning, edge, end_date)
+                VALUES ({_ph},{_ph},{_ph},{_ph},{_ph},{_ph},{_ph},'open',{_ph},{_ph},{_ph})
             """, _insert_vals)
             trade.trade_id = c.lastrowid
 

@@ -1440,6 +1440,10 @@ function initChart() {
                 if (r.closedAt) lines.push(`closed: ${new Date(r.closedAt).toLocaleString()}`);
               } else {
                 lines.push('status: OPEN');
+                if (r.end_date) {
+                  const rd = new Date(r.end_date);
+                  lines.push(`resolves: ${rd.toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'})}`);
+                }
               }
               return lines;
             },
@@ -1524,9 +1528,9 @@ function buildTimelineDatasets(trades) {
       return {
         type: 'line',
         data: [{ x: endMs, y: 0 }, { x: endMs, y: 1 }],
-        borderColor: 'rgba(240,192,64,0.35)',
-        borderWidth: 1,
-        borderDash: [4, 4],
+        borderColor: 'rgba(240,192,64,0.6)',
+        borderWidth: 2,
+        borderDash: [6, 3],
         pointRadius: 0,
         tension: 0,
         showLine: true,
@@ -1553,6 +1557,7 @@ function buildTimelineDatasets(trades) {
       pnl:         t.pnl || 0,
       openedAt:    t.timestamp,
       closedAt:    t.closed_at,
+      end_date:    t.end_date || null,
     });
   }
 
@@ -1583,6 +1588,15 @@ async function refreshChart() {
       timelineChart.data.datasets = [];
       timelineChart.update('none');
       return;
+    }
+
+    // Extend x-axis to cover future resolution dates
+    const tradeTs  = trades.map(t => new Date(t.timestamp).getTime());
+    const endDates = trades.filter(t => t.end_date).map(t => new Date(t.end_date).getTime());
+    const allTs    = [...tradeTs, ...endDates].filter(n => !isNaN(n));
+    if (allTs.length) {
+      timelineChart.options.scales.x.min = Math.min(...allTs);
+      timelineChart.options.scales.x.max = Math.max(...allTs) + 86400000; // +1 day padding
     }
 
     timelineChart.data.datasets = buildTimelineDatasets(trades);
