@@ -829,7 +829,9 @@
         <span><span style="color:var(--green)">&#9679;</span> WON</span>
         <span><span style="color:var(--red)">&#9679;</span> LOST</span>
         <span><span style="color:var(--amber)">&#9679;</span> OPEN</span>
-        <span style="font-size:9px;color:var(--muted)">scroll=zoom · drag=pan</span>
+        <span style="font-size:9px;color:var(--muted)">scroll=zoom</span>
+        <button onclick="if(timelineChart)timelineChart.pan({x:150},undefined,'default')" style="background:none;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:9px;padding:1px 7px;cursor:pointer;border-radius:2px">&#8592;</button>
+        <button onclick="if(timelineChart)timelineChart.pan({x:-150},undefined,'default')" style="background:none;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:9px;padding:1px 7px;cursor:pointer;border-radius:2px">&#8594;</button>
         <button onclick="if(timelineChart)timelineChart.resetZoom()" style="background:none;border:1px solid var(--border);color:var(--muted);font-family:inherit;font-size:9px;padding:1px 6px;cursor:pointer;border-radius:2px">RESET</button>
         <span>P&amp;L <span id="pnl-total" class="hstat-value pos" style="font-size:11px">+$0.00</span></span>
       </span>
