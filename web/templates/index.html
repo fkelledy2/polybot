@@ -1510,7 +1510,7 @@ function buildTimelineDatasets(trades) {
           { x: openMs,  y: t.entry_price, ...t },
           { x: closeMs, y: t.entry_price, ...t },
         ],
-        borderColor: col.border,
+        borderColor: 'rgba(255,255,255,0.6)',
         borderWidth: 1,
         borderDash: [3, 3],
         pointRadius: 0,
@@ -1529,7 +1529,7 @@ function buildTimelineDatasets(trades) {
       return {
         type: 'line',
         data: [{ x: openMs, y: t.entry_price }, { x: endMs, y: t.entry_price }],
-        borderColor: 'rgba(240,192,64,0.45)',
+        borderColor: 'rgba(255,255,255,0.6)',
         borderWidth: 1,
         borderDash: [4, 4],
         pointRadius: 0,
