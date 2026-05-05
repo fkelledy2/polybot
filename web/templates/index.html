@@ -1171,15 +1171,7 @@ async function refreshWallets() {
       <div class="wallet-row">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:11px;color:var(--green);font-weight:600">${w.name}</span>
-          <span class="tag-elite" style="font-size:9px;padding:1px 5px">ELITE</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:3px">
-          <span style="font-size:10px;color:var(--muted)">30d PnL</span>
           <span style="font-size:10px;color:${w.pnl>=0?'var(--green)':'var(--red)'}">${w.pnl>=0?'+':''}$${Math.abs(w.pnl).toLocaleString(undefined,{maximumFractionDigits:0})}</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:1px">
-          <span style="font-size:10px;color:var(--muted)">${w.address.slice(0,6)}...${w.address.slice(-4)}</span>
-          <span style="font-size:10px;color:var(--muted)">${(w.win_rate*100).toFixed(0)}% WR</span>
         </div>
       </div>`).join('');
   } catch(e) { console.warn('wallets', e); }
