@@ -1520,6 +1520,25 @@ function buildTimelineDatasets(trades) {
       };
     });
 
+  // Horizontal dashed lines from each open bubble to its resolution date
+  const openToEndLines = trades
+    .filter(t => t.status === 'open' && t.end_date)
+    .map(t => {
+      const openMs = new Date(t.timestamp).getTime();
+      const endMs  = new Date(t.end_date).getTime();
+      return {
+        type: 'line',
+        data: [{ x: openMs, y: t.entry_price }, { x: endMs, y: t.entry_price }],
+        borderColor: 'rgba(240,192,64,0.45)',
+        borderWidth: 1,
+        borderDash: [4, 4],
+        pointRadius: 0,
+        tension: 0,
+        showLine: true,
+        order: 2,
+      };
+    });
+
   // Vertical dashed lines at resolution date for open trades
   const resolveLines = trades
     .filter(t => t.status === 'open' && t.end_date)
@@ -1576,7 +1595,7 @@ function buildTimelineDatasets(trades) {
     };
   });
 
-  return [...lineDatasets, ...resolveLines, ...pointDatasets];
+  return [...lineDatasets, ...openToEndLines, ...resolveLines, ...pointDatasets];
 }
 
 async function refreshChart() {
