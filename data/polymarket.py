@@ -153,6 +153,7 @@ class PolymarketClient:
             return {
                 "question":             market.get("question", "Unknown"),
                 "market_id":            market.get("id"),
+                "condition_id":         market.get("conditionId"),
                 "yes":                  float(prices[0]),
                 "no":                   float(prices[1]),
                 "volume_usd":           float(market.get("volume", 0)),

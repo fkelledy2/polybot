@@ -52,6 +52,8 @@ ENABLE_WALLET_VETO = True
 WALLET_VETO_ON_EXTREME = True  # Especially for extreme prices
 # How many top wallets to track
 TOP_WALLETS_TO_TRACK = 20
+# Alpha decay threshold — exclude positions where this fraction of upside is gone
+ALPHA_DECAY_THRESHOLD = 0.25
 # Minimum win rate for a wallet to be considered "elite"
 MIN_WIN_RATE = 0.55           # 55%
 # Minimum number of trades before we trust a wallet's win rate

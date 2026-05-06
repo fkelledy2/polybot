@@ -138,8 +138,9 @@ def _get_calibration_correction(question: str, scan_count: int = 0) -> float:
         return 0.0
 
 
-def _build_signal(market: dict, result: dict, wallet_signals: list[dict],
-                  scan_count: int = 0) -> Optional[TradeSignal]:
+def _build_signal(market: dict, result: dict, wallet_signals: list[dict] = None,
+                  scan_count: int = 0,
+                  wallet_consensus: dict = None) -> Optional[TradeSignal]:
     """Convert a single Claude result dict into a TradeSignal."""
     try:
         market_id = market["market_id"]
@@ -175,7 +176,15 @@ def _build_signal(market: dict, result: dict, wallet_signals: list[dict],
 
         wallet_alignment = False
         has_wallet_data = False
-        if wallet_signals:
+
+        # Prefer richer consensus data; fall back to legacy flat list
+        if wallet_consensus:
+            cid = market.get("condition_id")
+            wc = wallet_consensus.get(cid) if cid else None
+            if wc:
+                has_wallet_data = True
+                wallet_alignment = (wc.winning_direction == direction)
+        elif wallet_signals:
             relevant = [s for s in wallet_signals if s.get("market_id") == market_id]
             has_wallet_data = bool(relevant)
             wallet_alignment = any(s["outcome"] == direction for s in relevant)
@@ -234,6 +243,7 @@ def batch_analyse_markets(
     enrichment: dict[str, str] = None,
     max_markets: int = 20,
     scan_count: int = 0,
+    wallet_consensus: dict = None,
 ) -> tuple[list[TradeSignal], list[TradeSignal]]:
     """
     Analyse multiple markets in a single Claude API call.
@@ -263,10 +273,27 @@ def batch_analyse_markets(
     for i, m in enumerate(markets_to_check):
         cat, _ = get_category_context(m["question"])
 
-        new_tag = " [NEW]" if m.get("is_new_market") else ""
+        if m.get("is_new_market"):
+            new_tag = " [NEW]"
+        elif m.get("is_discovered_market"):
+            new_tag = " [ELITE-DISCOVERED]"
+        else:
+            new_tag = ""
 
         wallet_note = ""
-        if wallet_signals:
+        if wallet_consensus:
+            cid = m.get("condition_id")
+            wc = wallet_consensus.get(cid) if cid else None
+            if wc:
+                split = f"{wc.yes_count}Y/{wc.no_count}N"
+                wallet_note = (
+                    f" | Elite consensus: {wc.winning_direction} "
+                    f"{wc.consensus_score:.0%} ({wc.trader_count} traders [{split}], "
+                    f"${wc.raw_usd:,.0f} combined)"
+                )
+                if wc.avg_entry_price:
+                    wallet_note += f" entry≈{wc.avg_entry_price:.0%}"
+        elif wallet_signals:
             relevant = [s for s in wallet_signals if s.get("market_id") == m["market_id"]]
             if relevant:
                 parts = [
@@ -349,7 +376,8 @@ def batch_analyse_markets(
                 logger.warning(f"Claude returned unknown market_id: {mid}")
                 continue
 
-            signal = _build_signal(market, result, wallet_signals, scan_count)
+            signal = _build_signal(market, result, wallet_signals, scan_count,
+                                   wallet_consensus=wallet_consensus)
             if signal:
                 logger.info(f"Signal: {signal}")
                 all_signals.append(signal)

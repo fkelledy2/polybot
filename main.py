@@ -168,8 +168,24 @@ def main():
                         f"sum={pair.implied_sum:.2f} ({pair.direction})")
                 arb_notes[mkt["market_id"]] = note
 
-        # ── 2. Wallet signals ─────────────────────────────────
-        wallet_signals = wallet_tracker.get_elite_signals() if ENABLE_WALLET_TRACKING else []
+        # ── 2. Wallet signals + consensus ────────────────────
+        wallet_consensus = {}
+        if ENABLE_WALLET_TRACKING:
+            bundle = wallet_tracker.get_elite_consensus()
+            wallet_consensus = bundle.consensus
+
+            # Market discovery: add elite-held markets not in the main scan
+            known_cids = {m.get("condition_id") for m in markets_parsed if m.get("condition_id")}
+            discovered = wallet_tracker.get_discovered_markets(known_cids, polymarket)
+            existing_ids = {m["market_id"] for m in markets_parsed}
+            added = 0
+            for dm in discovered:
+                if dm.get("market_id") and dm["market_id"] not in existing_ids:
+                    markets_parsed.append(dm)
+                    existing_ids.add(dm["market_id"])
+                    added += 1
+            if added:
+                logger.info(f"Added {added} elite-discovered markets to analysis queue")
 
         # ── 3. Enrich markets ─────────────────────────────────
         enrichment = enrich_markets(markets_parsed)
@@ -183,10 +199,10 @@ def main():
         # ── 4. Claude analysis ────────────────────────────────
         all_signals, signals = batch_analyse_markets(
             markets=markets_parsed,
-            wallet_signals=wallet_signals,
             enrichment=enrichment,
             max_markets=20,
             scan_count=scan_count,
+            wallet_consensus=wallet_consensus,
         )
 
         # S2-2: confirm high-edge signals with extended thinking
