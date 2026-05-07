@@ -149,10 +149,12 @@ def update_signals(all_signals: list, markets: list, wallets_tracked: int,
         if elite_wallets is not None:
             shared_state["elite_wallets"] = [
                 {
-                    "address":  w.address,
-                    "name":     w.name or f"{w.address[:6]}...{w.address[-4:]}",
-                    "pnl":      round(w.total_pnl_usd, 2),
-                    "win_rate": round(w.win_rate, 4),
+                    "address":    w.address,
+                    "name":       w.name or f"{w.address[:6]}...{w.address[-4:]}",
+                    "rank":       w.rank,
+                    "pnl":        round(w.total_pnl_usd, 2),
+                    "volume_usd": round(w.volume_usd, 2),
+                    "win_rate":   round(w.win_rate, 4),
                 }
                 for w in elite_wallets
             ]

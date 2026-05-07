@@ -27,6 +27,7 @@ class WalletProfile:
     total_trades: int = 0
     winning_trades: int = 0
     total_pnl_usd: float = 0.0
+    volume_usd: float = 0.0     # total 30-day trading volume
     current_positions: list = field(default_factory=list)
 
     @property
@@ -218,6 +219,7 @@ class WalletTracker:
                 total_trades=100,
                 winning_trades=60,
                 total_pnl_usd=pnl,
+                volume_usd=float(t.get("volume", 0) or 0),
             )
             profiles.append(profile)
             self.tracked_wallets[addr] = profile
