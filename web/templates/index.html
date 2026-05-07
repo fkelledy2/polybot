@@ -397,9 +397,10 @@
     .wallet-row {
       padding: 5px 0;
       border-bottom: 1px solid var(--border);
-      display: flex;
+      display: grid;
+      grid-template-columns: 3ch 1fr auto;
       align-items: center;
-      gap: 6px;
+      gap: 0 6px;
       font-size: 10px;
     }
     .w-addr { color: #9fd0af; flex: 1; font-variant-numeric: tabular-nums; }
@@ -1172,7 +1173,7 @@ async function refreshWallets() {
       return;
     }
     body.innerHTML = wallets.map(w => {
-      const pnlStr = (w.pnl >= 0 ? '+' : '') + '$' + Math.abs(w.pnl).toLocaleString(undefined, {maximumFractionDigits: 0});
+      const pnlStr = (w.pnl >= 0 ? '+' : '-') + '$' + Math.abs(w.pnl).toLocaleString(undefined, {maximumFractionDigits: 0});
       const volStr = w.volume_usd >= 1e6
         ? '$' + (w.volume_usd / 1e6).toFixed(1) + 'M vol'
         : w.volume_usd >= 1e3
@@ -1180,14 +1181,12 @@ async function refreshWallets() {
           : '';
       return `
       <div class="wallet-row">
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:6px">
-          <span style="font-size:10px;color:var(--muted);flex-shrink:0">#${w.rank}</span>
-          <span style="font-size:11px;color:var(--green);font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${w.name}</span>
+        <span style="font-size:10px;color:var(--muted);line-height:1.6">#${w.rank}</span>
+        <div style="overflow:hidden">
+          <div style="font-size:11px;color:var(--green);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${w.name}</div>
+          <div style="font-size:9px;color:var(--muted)">${volStr}</div>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:1px">
-          <span style="font-size:9px;color:var(--muted)">${volStr}</span>
-          <span style="font-size:11px;color:${w.pnl>=0?'var(--green)':'var(--red)'};font-weight:600">${pnlStr}</span>
-        </div>
+        <span style="font-size:11px;font-weight:600;color:${w.pnl>=0?'var(--green)':'var(--red)'};text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">${pnlStr}</span>
       </div>`;
     }).join('');
   } catch(e) { console.warn('wallets', e); }
