@@ -70,7 +70,15 @@ def get_context(question: str, session: requests.Session) -> str:
         return cached
 
     try:
-        titles = _brave(query, session) if _BRAVE_KEY else _ddg(query, session)
+        if _BRAVE_KEY:
+            titles = _brave(query, session)
+            try:
+                from web.usage import record_brave_search
+                record_brave_search(1)
+            except Exception:
+                pass
+        else:
+            titles = _ddg(query, session)
         if not titles:
             return ""
         result = "Search: " + " | ".join(t[:70] for t in titles[:3])

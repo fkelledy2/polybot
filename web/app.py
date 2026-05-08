@@ -523,5 +523,7 @@ def webhook_deploy():
 
 def run_server(host: str = "0.0.0.0", port: int = None) -> None:
     _init_scan_cache()
+    from web.usage import init_usage_table
+    init_usage_table()
     port = port or int(os.environ.get("PORT", 8080))
     app.run(host=host, port=port, debug=False, use_reloader=False, threaded=True)

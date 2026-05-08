@@ -1949,8 +1949,53 @@ async function refreshCosts() {
   try {
     const data = await fetch('/api/costs').then(r => r.json());
     const services = data.services || [];
-    const weekly = data.weekly || {};
+    const weekly  = data.weekly  || {};
     const monthly = data.monthly || {};
+
+    const SVC_LABELS = {
+      anthropic:    'Anthropic (Claude)',
+      brave_search: 'Brave Search',
+      odds_api:     'Odds API',
+      heroku:       'Heroku Dyno',
+    };
+
+    function fmtTok(n) {
+      if (!n) return '';
+      return n >= 1e6 ? (n/1e6).toFixed(1)+'M tok' : Math.round(n/1000)+'K tok';
+    }
+
+    function renderPeriod(period, color) {
+      const svcs = period.services || {};
+      let out = '';
+      for (const [key, row] of Object.entries(svcs)) {
+        if (!row.cost || row.cost <= 0) continue;
+        const label = SVC_LABELS[key] || key;
+        let detail = '';
+        if (key === 'anthropic' && row.input_tokens) {
+          const total = (row.input_tokens || 0) + (row.output_tokens || 0);
+          const cacheRead = row.cache_read || 0;
+          const cacheHit = total > 0 ? Math.round(cacheRead / total * 100) : 0;
+          detail = `<div style="color:var(--muted);font-size:9px;margin-top:1px;padding-left:8px">
+            ${fmtTok(row.input_tokens)} in · ${fmtTok(row.output_tokens)} out${cacheRead ? ' · ' + cacheHit + '% cached' : ''}
+          </div>`;
+        } else if (row.calls && key !== 'heroku') {
+          detail = `<div style="color:var(--muted);font-size:9px;margin-top:1px;padding-left:8px">${row.calls} calls</div>`;
+        }
+        out += `<div style="margin-bottom:5px;">
+          <div style="display:flex;justify-content:space-between;font-size:10px;">
+            <span>${label}</span>
+            <span style="color:${color};font-variant-numeric:tabular-nums">$${row.cost.toFixed(4)}</span>
+          </div>${detail}
+        </div>`;
+      }
+      if (!out) out = '<div style="color:var(--muted);font-size:10px">No usage recorded yet</div>';
+      const total = period.total || 0;
+      out += `<div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;color:${color};padding-top:4px;border-top:1px solid var(--border);">
+        <span>TOTAL</span>
+        <span style="font-variant-numeric:tabular-nums">$${total.toFixed(4)}</span>
+      </div>`;
+      return out;
+    }
 
     let html = '<div style="padding:12px;max-height:600px;overflow-y:auto;">';
 
@@ -1961,46 +2006,20 @@ async function refreshCosts() {
       const badge = s.enabled
         ? '<span style="color:var(--green);font-weight:600">●</span>'
         : '<span style="color:var(--muted)">○</span>';
-      html += `<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px;">
-        <span>${badge} ${s.name}</span>
-      </div>`;
+      html += `<div style="font-size:10px;margin-bottom:4px;">${badge} ${s.name}</div>`;
     }
     html += '</div>';
 
-    // Weekly costs
+    // 7-day costs
     html += '<div style="margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px;">';
-    html += '<div style="font-size:9px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase">WEEKLY</div>';
-    for (const [key, cost] of Object.entries(weekly.services || {})) {
-      if (cost.cost && cost.cost > 0) {
-        html += `<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;">
-          <span>${cost.service}</span>
-          <span style="color:var(--amber)">$${cost.cost.toFixed(2)}</span>
-        </div>`;
-      }
-    }
-    const weeklyTotal = weekly.total || 0;
-    html += `<div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;color:var(--amber);padding-top:4px;border-top:1px solid var(--border);">
-      <span>TOTAL</span>
-      <span>$${weeklyTotal.toFixed(2)}</span>
-    </div>`;
+    html += '<div style="font-size:9px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase">LAST 7 DAYS</div>';
+    html += renderPeriod(weekly, 'var(--amber)');
     html += '</div>';
 
-    // Monthly costs
-    html += '<div style="margin-bottom:12px;">';
-    html += '<div style="font-size:9px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase">MONTHLY</div>';
-    for (const [key, cost] of Object.entries(monthly.services || {})) {
-      if (cost.cost && cost.cost > 0) {
-        html += `<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:3px;">
-          <span>${cost.service}</span>
-          <span style="color:var(--green)">$${cost.cost.toFixed(2)}</span>
-        </div>`;
-      }
-    }
-    const monthlyTotal = monthly.total || 0;
-    html += `<div style="display:flex;justify-content:space-between;font-size:10px;font-weight:600;color:var(--green);padding-top:4px;border-top:1px solid var(--border);">
-      <span>TOTAL</span>
-      <span>$${monthlyTotal.toFixed(2)}</span>
-    </div>`;
+    // 30-day costs
+    html += '<div style="margin-bottom:8px;">';
+    html += '<div style="font-size:9px;color:var(--muted);margin-bottom:6px;font-weight:600;text-transform:uppercase">LAST 30 DAYS</div>';
+    html += renderPeriod(monthly, 'var(--green)');
     html += '</div>';
 
     html += '</div>';

@@ -364,6 +364,12 @@ def batch_analyse_markets(
                 f"cache_read: {cache_read}, cache_create: {cache_create}, "
                 f"output: {usage.output_tokens}"
             )
+        try:
+            from web.usage import record_anthropic
+            record_anthropic(CLAUDE_MODEL, usage.input_tokens, usage.output_tokens,
+                             cache_read, cache_create)
+        except Exception:
+            pass
 
         market_by_id = {m["market_id"]: m for m in markets_to_check}
 
@@ -465,6 +471,17 @@ def confirm_high_edge_signals(
                 tool_choice={"type": "auto"},  # forced tool_choice conflicts with thinking
                 messages=[{"role": "user", "content": content}]
             )
+
+            try:
+                from web.usage import record_anthropic
+                _u = resp.usage
+                record_anthropic(
+                    _CONFIRMATION_MODEL, _u.input_tokens, _u.output_tokens,
+                    getattr(_u, "cache_read_input_tokens", 0) or 0,
+                    getattr(_u, "cache_creation_input_tokens", 0) or 0,
+                )
+            except Exception:
+                pass
 
             tool_block = next(
                 (b for b in resp.content if b.type == "tool_use"),

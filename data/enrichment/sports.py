@@ -65,6 +65,11 @@ def _fetch_odds(sport_key: str, session: requests.Session) -> list[dict]:
         if r.status_code == 200:
             data = r.json()
             _cache.set(cache_key, data, ttl=900)  # 15 min
+            try:
+                from web.usage import record_odds_api
+                record_odds_api(1)
+            except Exception:
+                pass
             return data
         logger.debug(f"Odds API returned {r.status_code} for {sport_key}")
     except Exception as e:
