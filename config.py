@@ -75,6 +75,12 @@ MOMENTUM_CONFIRM_DISCOUNT = 0.01   # reduce required edge 1% when momentum confi
 MOMENTUM_OPPOSE_PENALTY   = 0.02   # raise required edge 2% when momentum opposes direction
 MOMENTUM_MIN_MAGNITUDE    = 0.03   # ignore moves < 3% (noise filter)
 
+# ── Longshot NO Betting (FEAT-03) ────────────────────────────
+# When YES price is at or below this threshold the market is a structural
+# longshot. Betting NO (buying the overdog) exploits documented crowd bias.
+LONGSHOT_NO_THRESHOLD = 0.12   # YES <= 12% triggers longshot evaluation
+LONGSHOT_NO_MIN_EDGE  = 0.05   # minimum edge required for a longshot NO trade
+
 # ── Scheduling ────────────────────────────────────────────────
 # How often the bot scans for opportunities (in seconds)
 SCAN_INTERVAL_SECONDS = 600   # Every 10 minutes — markets move slowly, saves ~90% API cost

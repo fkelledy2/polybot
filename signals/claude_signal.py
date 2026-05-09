@@ -18,6 +18,7 @@ from config import (
     MIN_EDGE_TO_TRADE_EXTREME, EXTREME_PRICE_THRESHOLD,
     ENABLE_WALLET_VETO, WALLET_VETO_ON_EXTREME,
     MOMENTUM_CONFIRM_DISCOUNT, MOMENTUM_OPPOSE_PENALTY, MOMENTUM_MIN_MAGNITUDE,
+    LONGSHOT_NO_THRESHOLD, LONGSHOT_NO_MIN_EDGE,
 )
 from signals.categorizer import get_category_context, detect_category, CATEGORY_CONTEXT
 
@@ -99,6 +100,7 @@ CORE PRINCIPLES:
 5. Elite wallet signals are weak supporting evidence. Even top traders are right ~60% of the time. Weight them as a minor tiebreaker, not a primary signal.
 6. Avoid anchoring to round numbers — your probability should reflect your actual belief, not be rounded to 0.50, 0.60, 0.70, etc.
 7. [NEW] markets (listed <48h) may have less-efficient pricing at formation — apply slightly more scrutiny to find edge.
+8. [LONGSHOT] markets (YES price ≤ 12%) are structural overdog markets. Academic research confirms prediction market longshots lose ~60% of the time due to crowd overpricing. When you see [LONGSHOT] and agree the outcome is genuinely unlikely, set yes_probability in the 0.04–0.09 range and confidence "medium". Only assign higher probability if you have a specific concrete reason the market is underpriced.
 
 CATEGORY-SPECIFIC GUIDANCE:
 {_CATEGORY_GUIDANCE}
@@ -206,6 +208,14 @@ def _build_signal(market: dict, result: dict, wallet_signals: list[dict] = None,
         )
         if yes_price_is_extreme:
             effective_min = max(effective_min, MIN_EDGE_TO_TRADE_EXTREME)
+
+        # ── FEAT-03: Longshot NO bias guard ──────────────────────
+        if yes_price <= LONGSHOT_NO_THRESHOLD and direction == "NO":
+            effective_min = min(effective_min, LONGSHOT_NO_MIN_EDGE)
+            logger.debug(
+                f"Longshot NO: YES={yes_price:.1%} edge bar→{LONGSHOT_NO_MIN_EDGE:.0%} "
+                f"({market.get('question','')[:50]})"
+            )
 
         # ── FEAT-04: Price momentum modifier ─────────────────────
         velocity = market.get("price_velocity_24h")
@@ -324,6 +334,8 @@ def batch_analyse_markets(
         else:
             new_tag = ""
 
+        longshot_tag = " [LONGSHOT]" if m.get("yes", 1) <= LONGSHOT_NO_THRESHOLD else ""
+
         wallet_note = ""
         if wallet_consensus:
             cid = m.get("condition_id")
@@ -361,7 +373,7 @@ def batch_analyse_markets(
             velocity_note = f" | 24h: {v:+.0%}"
 
         market_lines.append(
-            f"{i+1}. [{m['market_id']}] [{cat}]{new_tag} {m['question']}\n"
+            f"{i+1}. [{m['market_id']}] [{cat}]{new_tag}{longshot_tag} {m['question']}\n"
             f"   YES={m['yes']:.1%}  NO={1-m['yes']:.1%}"
             f"{wallet_note}{velocity_note}{resolution_note}{live_note}"
         )
