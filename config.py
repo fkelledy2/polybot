@@ -35,7 +35,7 @@ MIN_EDGE_TO_TRADE = 0.06      # 6% minimum edge before placing a trade (Dune-opt
 MIN_EDGE_TO_TRADE_EXTREME = 0.20  # 20% edge for extreme prices (backtest-optimized)
 EXTREME_PRICE_THRESHOLD = 0.03       # Markets below 3% or above 97%
 
-MIN_ENTRY_PROBABILITY = 0.03   # Never enter a trade at <3% probability (100:33 odds)
+MIN_ENTRY_PROBABILITY = 0.15   # Never enter a trade at <15% implied probability
 
 # ── Risk Management ───────────────────────────────────────────
 MAX_POSITION_PCT  = 0.05      # Never risk more than 5% of bankroll on one trade
@@ -67,7 +67,7 @@ MAX_DAYS_TO_RESOLVE = 16      # Skip markets resolving > 16 days away (Dune-opti
 
 # ── Category Performance Tuning ────────────────
 # Disable trading in weak-performing categories.
-DISABLED_CATEGORIES = ['CRYPTO']
+DISABLED_CATEGORIES = ['CRYPTO', 'SPORTS']
 MIN_DAYS_TO_RESOLVE = 1       # Skip markets resolving < 1 day away (too late)
 
 # ── Scheduling ────────────────────────────────────────────────

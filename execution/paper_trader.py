@@ -12,7 +12,7 @@ from typing import Optional
 import db
 from config import STARTING_BALANCE, MAX_POSITION_PCT, MAX_OPEN_POSITIONS
 
-KELLY_FRACTION = 0.5
+KELLY_FRACTION = 0.35
 KELLY_MAX_PCT  = MAX_POSITION_PCT
 
 _CONFIDENCE_MULTIPLIER = {"high": 1.0, "medium": 0.75, "low": 0.5}
