@@ -103,6 +103,7 @@ CORE PRINCIPLES:
 7. [NEW] markets (listed <48h) may have less-efficient pricing at formation — apply slightly more scrutiny to find edge.
 8. [LONGSHOT] markets (YES price ≤ 12%) are structural overdog markets. Academic research confirms prediction market longshots lose ~60% of the time due to crowd overpricing. When you see [LONGSHOT] and agree the outcome is genuinely unlikely, set yes_probability in the 0.04–0.09 range and confidence "medium". Only assign higher probability if you have a specific concrete reason the market is underpriced.
 9. [AMBIGUITY=X.XX] next to Resolution criteria means the criteria text contains vague or discretionary language (0.0=clear, 1.0=highly subjective). For AMBIGUITY >= 0.35: widen your probability toward 0.50 and lower confidence to "medium". For AMBIGUITY >= 0.60: set confidence "low" — these markets carry meaningful misresolution risk regardless of your probability estimate.
+10. When LIVE context contains "Manifold consensus" with [DIVERGENCE ±N%], treat this as a meaningful independent calibration signal from a separate expert forecaster community. A [DIVERGENCE +10%] or more means Manifold forecasters think YES is more likely than Polymarket; a negative divergence means they think it is less likely. Weight this similarly to a Metaculus consensus — it is not decisive alone, but at ≥±10% divergence it should pull your estimate noticeably toward Manifold's direction unless you have specific evidence against it.
 
 CATEGORY-SPECIFIC GUIDANCE:
 {_CATEGORY_GUIDANCE}
