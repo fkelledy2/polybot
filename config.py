@@ -67,7 +67,7 @@ MAX_DAYS_TO_RESOLVE = 16      # Skip markets resolving > 16 days away (Dune-opti
 
 # ── Category Performance Tuning ────────────────
 # Disable trading in weak-performing categories.
-DISABLED_CATEGORIES = ['CRYPTO', 'SPORTS']
+DISABLED_CATEGORIES = ['CRYPTO', 'SPORTS', 'EARNINGS']
 MIN_DAYS_TO_RESOLVE = 1       # Skip markets resolving < 1 day away (too late)
 
 # ── Scheduling ────────────────────────────────────────────────

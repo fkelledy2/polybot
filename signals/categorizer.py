@@ -58,6 +58,14 @@ CATEGORIES = {
         r"\bgaza\b", r"\bukraine\b", r"\bussia\b", r"\biran\b", r"\bchina\b",
         r"\bnato\b", r"\bsanction\b", r"\bconflict\b", r"\battack\b",
     ],
+    "EARNINGS": [
+        r"\beat.*earnings\b", r"\bearnings.*beat\b",
+        r"\bquarterly (earnings|results|revenue)\b",
+        r"\beps\b", r"\bbeat.*eps\b", r"\bmiss.*eps\b",
+        r"\bearnings per share\b", r"\bq[1-4] (earnings|results)\b",
+        r"\bbeat.*consensus\b", r"\b(revenue|profit).*estimates?\b",
+        r"\bearnings (surprise|miss|beat)\b",
+    ],
 }
 
 CATEGORY_CONTEXT = {
@@ -114,6 +122,14 @@ CATEGORY_CONTEXT = {
         "- Diplomatic signals, back-channel negotiations\n"
         "- Key actors' incentives and red lines\n"
         "- Deadline proximity: harder to resolve as deadline nears"
+    ),
+    "EARNINGS": (
+        "This is a CORPORATE EARNINGS market. Key analysis factors:\n"
+        "- Historical beat rate for this company and sector (~70% for S&P 500 broadly)\n"
+        "- Analyst consensus estimate vs company guidance\n"
+        "- Recent earnings trend and management credibility\n"
+        "- NOTE: Claude's training data may not include current quarter guidance — apply\n"
+        "  caution and lean on base rates rather than company-specific current data"
     ),
     "GENERAL": (
         "Analyse this market carefully using base rates and available evidence."
