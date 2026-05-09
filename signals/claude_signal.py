@@ -42,6 +42,12 @@ _CONFIRMATION_MODEL = "claude-sonnet-4-6"
 # ── S4-4: active batch state ──────────────────────────────────
 _active_batch_id: str | None = None
 
+# ── Signal cache — skip re-analysis when price hasn't moved ──
+# market_id -> (cached_yes_price, TradeSignal, scan_count_when_cached)
+_signal_cache: dict[str, tuple] = {}
+_PRICE_MOVE_THRESHOLD = 0.02   # re-analyse if YES price moved >2%
+_CACHE_TTL_SCANS      = 18     # force refresh after ~3 hrs (18×10 min scans)
+
 
 @dataclass
 class TradeSignal:
@@ -267,10 +273,35 @@ def batch_analyse_markets(
         logger.info("No valid markets to analyse")
         return [], []
 
-    logger.info(f"Analysing {len(markets_to_check)} markets with Claude...")
+    # ── Signal cache: only send markets whose price moved or cache expired ──
+    fresh, cached_signals = [], []
+    for m in markets_to_check:
+        mid = m["market_id"]
+        yes = m["yes"]
+        entry = _signal_cache.get(mid)
+        if entry is None:
+            fresh.append(m)
+        else:
+            cached_price, cached_sig, cached_scan = entry
+            price_moved = abs(yes - cached_price) >= _PRICE_MOVE_THRESHOLD
+            cache_stale = (scan_count - cached_scan) >= _CACHE_TTL_SCANS
+            if price_moved or cache_stale:
+                fresh.append(m)
+            else:
+                cached_signals.append(cached_sig)
+
+    if not fresh:
+        logger.info(f"All {len(cached_signals)} markets served from signal cache (no price moves)")
+        tradeable = [s for s in cached_signals if s.should_trade]
+        return cached_signals, tradeable
+
+    logger.info(
+        f"Analysing {len(fresh)} markets with Claude "
+        f"({len(cached_signals)} cached, {len(fresh)} fresh)..."
+    )
 
     market_lines = []
-    for i, m in enumerate(markets_to_check):
+    for i, m in enumerate(fresh):
         cat, _ = get_category_context(m["question"])
 
         if m.get("is_new_market"):
@@ -324,7 +355,7 @@ def batch_analyse_markets(
 
     markets_block = "\n".join(market_lines)
     user_message = (
-        f"Analyse these {len(markets_to_check)} prediction markets and call "
+        f"Analyse these {len(fresh)} prediction markets and call "
         f"submit_market_analysis with your estimates:\n\n{markets_block}"
     )
 
@@ -348,12 +379,12 @@ def batch_analyse_markets(
         )
         if not tool_block:
             logger.error("Claude did not return a tool_use block")
-            return [], []
+            return cached_signals, [s for s in cached_signals if s.should_trade]
 
         results = tool_block.input.get("analyses", [])
         if not isinstance(results, list):
             logger.error("Tool call 'analyses' field is not a list")
-            return [], []
+            return cached_signals, [s for s in cached_signals if s.should_trade]
 
         usage = response.usage
         cache_read   = getattr(usage, "cache_read_input_tokens", 0) or 0
@@ -371,10 +402,9 @@ def batch_analyse_markets(
         except Exception:
             pass
 
-        market_by_id = {m["market_id"]: m for m in markets_to_check}
+        market_by_id = {m["market_id"]: m for m in fresh}
 
-        all_signals = []
-        tradeable_signals = []
+        new_signals = []
         for result in results:
             mid    = result.get("market_id")
             market = market_by_id.get(mid)
@@ -386,11 +416,15 @@ def batch_analyse_markets(
                                    wallet_consensus=wallet_consensus)
             if signal:
                 logger.info(f"Signal: {signal}")
-                all_signals.append(signal)
-                if signal.should_trade:
-                    tradeable_signals.append(signal)
+                new_signals.append(signal)
+                _signal_cache[mid] = (market["yes"], signal, scan_count)
 
-        logger.info(f"Found {len(tradeable_signals)} tradeable signals")
+        all_signals = cached_signals + new_signals
+        tradeable_signals = [s for s in all_signals if s.should_trade]
+        logger.info(
+            f"Found {len(tradeable_signals)} tradeable signals "
+            f"({len(new_signals)} fresh, {len(cached_signals)} cached)"
+        )
         return all_signals, tradeable_signals
 
     except anthropic.APIStatusError as e:
@@ -417,7 +451,7 @@ def confirm_high_edge_signals(
     signals: list[TradeSignal],
     markets: list[dict],
     enrichment: dict[str, str] = None,
-    max_confirmations: int = 3,
+    max_confirmations: int = 1,
 ) -> list[TradeSignal]:
     """
     S2-2: Re-analyse high-edge signals with adaptive thinking on Sonnet.
@@ -426,7 +460,7 @@ def confirm_high_edge_signals(
     """
     candidates = [
         s for s in signals
-        if abs(s.edge) > 0.20 and s.confidence != "low"
+        if abs(s.edge) > 0.30 and s.confidence != "low"
     ][:max_confirmations]
 
     if not candidates:

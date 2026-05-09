@@ -72,7 +72,7 @@ MIN_DAYS_TO_RESOLVE = 1       # Skip markets resolving < 1 day away (too late)
 
 # ── Scheduling ────────────────────────────────────────────────
 # How often the bot scans for opportunities (in seconds)
-SCAN_INTERVAL_SECONDS = 60    # Every 60 seconds
+SCAN_INTERVAL_SECONDS = 600   # Every 10 minutes — markets move slowly, saves ~90% API cost
 
 # ── Polymarket API ────────────────────────────────────────────
 POLYMARKET_API_BASE = "https://gamma-api.polymarket.com"
