@@ -454,6 +454,38 @@ def api_costs():
     return jsonify(get_all_costs_summary())
 
 
+@app.route("/api/build-log")
+@login_required
+def api_build_log():
+    """Return recent git commits as the build / deployment log."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            [
+                "git", "log", "--format=%H\x1f%h\x1f%s\x1f%aI\x1f%ar",
+                "-20",
+            ],
+            capture_output=True, text=True, timeout=5,
+            cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        )
+        commits = []
+        for line in result.stdout.strip().splitlines():
+            if not line.strip():
+                continue
+            parts = line.split("\x1f")
+            if len(parts) == 5:
+                commits.append({
+                    "hash":     parts[1],
+                    "message":  parts[2],
+                    "iso":      parts[3],
+                    "relative": parts[4],
+                })
+        return jsonify({"commits": commits})
+    except Exception as e:
+        logger.warning(f"build-log git error: {e}")
+        return jsonify({"commits": [], "error": str(e)})
+
+
 @app.route("/api/wallets")
 @login_required
 def api_wallets():

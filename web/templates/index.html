@@ -1709,77 +1709,56 @@ function startSSE() {
 // IMPROVEMENT LOG (Build log / daily improvements)
 // ══════════════════════════════════════════════════════════════
 async function refreshImprovementLog() {
+  const el = document.getElementById('improvement-log');
   try {
-    // Fetch the latest analysis report
-    const response = await fetch('/.claude/analysis_report.json');
-    if (!response.ok) return;
+    const data = await fetch('/api/build-log').then(r => r.json());
+    const commits = data.commits || [];
 
-    const report = await response.json();
-    const el = document.getElementById('improvement-log');
-
-    if (!report.analysis || !report.analysis.critical_issues) {
-      el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">No improvements available</div>';
+    if (!commits.length) {
+      el.innerHTML = '<div style="color:var(--muted);padding:20px 0;text-align:center">No commits found</div>';
       return;
     }
 
+    // Update header: relative time of latest commit
+    document.getElementById('improvement-count').textContent = commits[0].relative;
+
+    // Colour-code by commit prefix
+    function commitColor(msg) {
+      if (/^feat|^add/i.test(msg))  return 'var(--green)';
+      if (/^fix/i.test(msg))        return 'var(--amber)';
+      if (/^perf|^cost|^risk/i.test(msg)) return '#7eb8f7';
+      if (/^tune|^backtest/i.test(msg)) return '#c792ea';
+      return 'var(--muted)';
+    }
+
     let html = '';
-
-    // Show execution status
-    const exec = report.execution || {};
-    if (exec.status === 'success' && exec.changes_made) {
-      html += '<div style="margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);">';
-      html += '<div style="color:var(--green);font-weight:bold;margin-bottom:4px;">✅ IMPROVEMENTS DEPLOYED</div>';
-      for (const change of exec.changes_made) {
-        html += `<div style="margin-left:8px;color:#5ab87a;">• ${change}</div>`;
-      }
-      if (exec.git_commits && exec.git_commits[0]) {
-        html += `<div style="margin-left:8px;color:var(--muted);font-size:8px;margin-top:4px;">Commit: ${exec.git_commits[0].substring(0, 8)}</div>`;
-      }
-      html += '</div>';
-    } else if (exec.status === 'no_changes') {
-      html += '<div style="margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);color:var(--muted);">ℹ️ No changes needed</div>';
+    for (const c of commits) {
+      const dt = new Date(c.iso);
+      const dateStr = dt.toLocaleDateString('en-GB', {day:'2-digit',month:'short'});
+      const timeStr = dt.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+      const color = commitColor(c.message);
+      html += `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;
+                    margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--border);gap:6px;">
+          <div style="flex:1;min-width:0;">
+            <span style="color:${color};font-size:9px;display:block;
+                         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              ${c.message}
+            </span>
+            <span style="color:var(--muted);font-size:8px;">${c.hash}</span>
+          </div>
+          <div style="flex-shrink:0;text-align:right;font-size:8px;color:var(--muted);
+                      font-variant-numeric:tabular-nums;white-space:nowrap;">
+            <div>${dateStr}</div>
+            <div>${timeStr}</div>
+          </div>
+        </div>`;
     }
 
-    // Show configured improvements
-    if (report.recommendations && report.recommendations.auto_implement) {
-      html += '<div style="margin-bottom:8px;"><div style="color:var(--amber);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📋 Implemented</div>';
-      for (const imp of report.recommendations.auto_implement) {
-        if (imp.name.includes('Extreme') || imp.name.includes('Wallet') || imp.name.includes('Calibration')) {
-          html += `<div style="margin-left:8px;color:#5ab87a;font-size:9px;margin-bottom:3px;">✓ ${imp.name}</div>`;
-        }
-      }
-      html += '</div>';
-    }
-
-    // Show pending improvements
-    if (report.recommendations && report.recommendations.auto_implement) {
-      const pending = report.recommendations.auto_implement.filter(i => !i.name.includes('Extreme') && !i.name.includes('Wallet') && !i.name.includes('Calibration'));
-      if (pending.length > 0) {
-        html += '<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);"><div style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">⏳ Pending</div>';
-        for (const imp of pending) {
-          html += `<div style="margin-left:8px;color:var(--muted);font-size:9px;margin-bottom:3px;">• ${imp.name}</div>`;
-        }
-        html += '</div>';
-      }
-    }
-
-    // Show last updated
-    if (report.timestamp) {
-      const updated = new Date(report.timestamp);
-      const timeAgo = Math.floor((Date.now() - updated) / 1000);
-      let timeStr = timeAgo + 's ago';
-      if (timeAgo > 3600) timeStr = Math.floor(timeAgo / 3600) + 'h ago';
-      else if (timeAgo > 60) timeStr = Math.floor(timeAgo / 60) + 'm ago';
-
-      document.getElementById('improvement-count').textContent = timeStr;
-      html += `<div style="margin-top:12px;padding-top:8px;border-top:1px solid var(--border);color:var(--muted);font-size:8px;">Updated: ${updated.toLocaleTimeString()}</div>`;
-    }
-
-    el.innerHTML = html || '<div style="color:var(--muted);padding:20px 0;text-align:center">No data available</div>';
-
+    el.innerHTML = html;
   } catch(e) {
-    console.warn('Failed to load improvement log:', e);
-    document.getElementById('improvement-log').innerHTML = '<div style="color:var(--red);padding:20px 0;text-align:center">Error loading improvements</div>';
+    console.warn('Failed to load build log:', e);
+    el.innerHTML = '<div style="color:var(--red);padding:20px 0;text-align:center">Error loading build log</div>';
   }
 }
 
