@@ -454,36 +454,82 @@ def api_costs():
     return jsonify(get_all_costs_summary())
 
 
+_GITHUB_REPO = "fkelledy2/polybot"
+_build_log_cache: list = []
+_build_log_fetched_at: float = 0.0
+
+
+def _time_ago(iso: str) -> str:
+    from datetime import timezone
+    try:
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        secs = int((datetime.now(timezone.utc) - dt).total_seconds())
+        if secs < 60:   return f"{secs}s ago"
+        if secs < 3600: return f"{secs//60}m ago"
+        if secs < 86400: return f"{secs//3600}h ago"
+        return f"{secs//86400}d ago"
+    except Exception:
+        return ""
+
+
 @app.route("/api/build-log")
 @login_required
 def api_build_log():
-    """Return recent git commits as the build / deployment log."""
-    import subprocess
+    """Return recent git commits — tries local git first, falls back to GitHub API."""
+    global _build_log_cache, _build_log_fetched_at
+    import subprocess, requests as _req
+
+    # Return cached result if fresh (< 5 min)
+    if _build_log_cache and (time.time() - _build_log_fetched_at) < 300:
+        return jsonify({"commits": _build_log_cache})
+
+    # 1. Try local git (works in dev, not on Heroku slugs)
     try:
         result = subprocess.run(
-            [
-                "git", "log", "--format=%H\x1f%h\x1f%s\x1f%aI\x1f%ar",
-                "-20",
-            ],
+            ["git", "log", "--format=%H\x1f%h\x1f%s\x1f%aI", "-20"],
             capture_output=True, text=True, timeout=5,
             cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         )
+        if result.returncode == 0 and result.stdout.strip():
+            commits = []
+            for line in result.stdout.strip().splitlines():
+                parts = line.split("\x1f")
+                if len(parts) == 4:
+                    commits.append({
+                        "hash": parts[1], "message": parts[2],
+                        "iso": parts[3], "relative": _time_ago(parts[3]),
+                    })
+            if commits:
+                _build_log_cache = commits
+                _build_log_fetched_at = time.time()
+                return jsonify({"commits": commits})
+    except Exception:
+        pass
+
+    # 2. Fall back to GitHub API (works on Heroku)
+    try:
+        token = os.environ.get("GITHUB_TOKEN", "")
+        headers = {"Authorization": f"token {token}"} if token else {}
+        resp = _req.get(
+            f"https://api.github.com/repos/{_GITHUB_REPO}/commits",
+            headers=headers, params={"per_page": 20}, timeout=8,
+        )
+        resp.raise_for_status()
         commits = []
-        for line in result.stdout.strip().splitlines():
-            if not line.strip():
-                continue
-            parts = line.split("\x1f")
-            if len(parts) == 5:
-                commits.append({
-                    "hash":     parts[1],
-                    "message":  parts[2],
-                    "iso":      parts[3],
-                    "relative": parts[4],
-                })
+        for c in resp.json():
+            iso = c["commit"]["author"]["date"]
+            commits.append({
+                "hash":     c["sha"][:7],
+                "message":  c["commit"]["message"].split("\n")[0],
+                "iso":      iso,
+                "relative": _time_ago(iso),
+            })
+        _build_log_cache = commits
+        _build_log_fetched_at = time.time()
         return jsonify({"commits": commits})
     except Exception as e:
-        logger.warning(f"build-log git error: {e}")
-        return jsonify({"commits": [], "error": str(e)})
+        logger.warning(f"build-log GitHub API error: {e}")
+        return jsonify({"commits": _build_log_cache, "error": str(e)})
 
 
 @app.route("/api/wallets")
