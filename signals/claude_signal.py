@@ -19,6 +19,7 @@ from config import (
     ENABLE_WALLET_VETO, WALLET_VETO_ON_EXTREME,
     MOMENTUM_CONFIRM_DISCOUNT, MOMENTUM_OPPOSE_PENALTY, MOMENTUM_MIN_MAGNITUDE,
     LONGSHOT_NO_THRESHOLD, LONGSHOT_NO_MIN_EDGE,
+    AMBIGUITY_BLOCK_THRESHOLD, AMBIGUITY_WARN_THRESHOLD,
 )
 from signals.categorizer import get_category_context, detect_category, CATEGORY_CONTEXT
 
@@ -101,6 +102,7 @@ CORE PRINCIPLES:
 6. Avoid anchoring to round numbers — your probability should reflect your actual belief, not be rounded to 0.50, 0.60, 0.70, etc.
 7. [NEW] markets (listed <48h) may have less-efficient pricing at formation — apply slightly more scrutiny to find edge.
 8. [LONGSHOT] markets (YES price ≤ 12%) are structural overdog markets. Academic research confirms prediction market longshots lose ~60% of the time due to crowd overpricing. When you see [LONGSHOT] and agree the outcome is genuinely unlikely, set yes_probability in the 0.04–0.09 range and confidence "medium". Only assign higher probability if you have a specific concrete reason the market is underpriced.
+9. [AMBIGUITY=X.XX] next to Resolution criteria means the criteria text contains vague or discretionary language (0.0=clear, 1.0=highly subjective). For AMBIGUITY >= 0.35: widen your probability toward 0.50 and lower confidence to "medium". For AMBIGUITY >= 0.60: set confidence "low" — these markets carry meaningful misresolution risk regardless of your probability estimate.
 
 CATEGORY-SPECIFIC GUIDANCE:
 {_CATEGORY_GUIDANCE}
@@ -243,6 +245,18 @@ def _build_signal(market: dict, result: dict, wallet_signals: list[dict] = None,
             if ENABLE_WALLET_VETO or (WALLET_VETO_ON_EXTREME and yes_price_is_extreme):
                 should_trade = False
 
+        # ── FEAT-05: Resolution ambiguity gate ───────────────────
+        ambiguity = market.get("ambiguity_score", 0.0)
+        if ambiguity >= AMBIGUITY_BLOCK_THRESHOLD:
+            logger.info(
+                f"Ambiguity block (score={ambiguity:.2f}): {market.get('question','')[:60]}"
+            )
+            should_trade = False
+        elif ambiguity >= AMBIGUITY_WARN_THRESHOLD:
+            logger.debug(
+                f"Ambiguity warn (score={ambiguity:.2f}): {market.get('question','')[:60]}"
+            )
+
         # Category filter: skip if this category has been disabled by the analyzer
         if _DISABLED_CATEGORIES:
             market_cat = detect_category(market.get("question", ""))
@@ -361,7 +375,9 @@ def batch_analyse_markets(
 
         resolution_note = ""
         if m.get("resolution_criteria"):
-            resolution_note = f"\n   Resolution: {m['resolution_criteria'][:250]}"
+            amb = m.get("ambiguity_score", 0.0)
+            amb_tag = f" [AMBIGUITY={amb:.2f}]" if amb >= 0.20 else ""
+            resolution_note = f"\n   Resolution{amb_tag}: {m['resolution_criteria'][:250]}"
 
         live_note = ""
         if (enrichment or {}).get(m["market_id"]):

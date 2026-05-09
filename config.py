@@ -75,6 +75,10 @@ MOMENTUM_CONFIRM_DISCOUNT = 0.01   # reduce required edge 1% when momentum confi
 MOMENTUM_OPPOSE_PENALTY   = 0.02   # raise required edge 2% when momentum opposes direction
 MOMENTUM_MIN_MAGNITUDE    = 0.03   # ignore moves < 3% (noise filter)
 
+# ── Resolution Ambiguity Filter (FEAT-05) ────────────────────
+AMBIGUITY_BLOCK_THRESHOLD = 0.60  # block trades if ambiguity score >= this
+AMBIGUITY_WARN_THRESHOLD  = 0.35  # log warning but still allow trade
+
 # ── Longshot NO Betting (FEAT-03) ────────────────────────────
 # When YES price is at or below this threshold the market is a structural
 # longshot. Betting NO (buying the overdog) exploits documented crowd bias.

@@ -20,6 +20,7 @@ from risk.manager import RiskManager
 from signals.claude_signal import (batch_analyse_markets, confirm_high_edge_signals,
                                     batch_reanalyse_open_positions, poll_batch_results)
 from signals.clustering import cluster_markets
+from signals.resolution_scorer import score_ambiguity
 from signals.arbitrage import find_arbitrage_pairs
 from web.app import install_log_handler, run_server, shared_state, update_signals
 from backtest.tracker import (init_tracker, log_signals, check_and_resolve_markets,
@@ -137,6 +138,10 @@ def main():
         velocities = get_price_velocities([m["market_id"] for m in markets_parsed])
         for m in markets_parsed:
             m["price_velocity_24h"] = velocities.get(m["market_id"])
+
+        # FEAT-05: resolution ambiguity pre-score (once per scan, free)
+        for m in markets_parsed:
+            m["ambiguity_score"] = score_ambiguity(m.get("resolution_criteria", ""))
 
         # S4-1: freshen prices from CLOB WebSocket cache
         update_subscriptions(markets_parsed)
