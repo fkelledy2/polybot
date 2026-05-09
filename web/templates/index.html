@@ -443,7 +443,27 @@
       grid-template-columns: 28px 1fr 36px 50px 48px 60px;
       gap: 4px;
       align-items: center;
+      position: relative;
+      cursor: default;
     }
+    .trade-row .trade-tooltip {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 4px);
+      left: 0; right: 0;
+      background: rgba(10,10,10,0.97);
+      border: 1px solid var(--green);
+      color: #d0ffd8;
+      padding: 7px 10px;
+      font-size: 10px;
+      line-height: 1.45;
+      border-radius: 3px;
+      z-index: 200;
+      white-space: normal;
+      pointer-events: none;
+      box-shadow: 0 2px 12px rgba(0,255,65,0.12);
+    }
+    .trade-row:hover .trade-tooltip { display: block; }
     .t-id    { color: var(--muted); font-variant-numeric: tabular-nums; }
     .t-q     { color: #c0ffd0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .t-dir   { text-align: center; font-weight: bold; font-size: 9px; }
@@ -1264,7 +1284,12 @@ async function refreshTrades() {
         pnlHtml = `<span class="t-pnl ${pnlClass(pnl)}">${fmt$(pnl, true)}</span>`;
       }
 
+      const tooltipHtml = t.reasoning
+        ? `<div class="trade-tooltip">${esc(t.reasoning)}</div>`
+        : '';
+
       return `<div class="trade-row">
+        ${tooltipHtml}
         <span class="t-id">#${t.id}</span>
         <span class="t-q" title="${esc(t.question)}">${esc(t.question)}</span>
         <span class="t-dir ${dCls}">${t.direction}</span>

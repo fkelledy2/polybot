@@ -305,7 +305,7 @@ def api_trades():
         c.execute("""
             SELECT id, market_id, question, direction,
                    entry_price, size_usd, shares,
-                   timestamp, status, exit_price, pnl
+                   timestamp, status, exit_price, pnl, reasoning
             FROM trades ORDER BY id DESC LIMIT 100
         """)
         rows = [dict(r) for r in c.fetchall()]
