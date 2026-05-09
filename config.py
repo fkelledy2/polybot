@@ -70,6 +70,11 @@ MAX_DAYS_TO_RESOLVE = 16      # Skip markets resolving > 16 days away (Dune-opti
 DISABLED_CATEGORIES = ['CRYPTO', 'SPORTS', 'EARNINGS']
 MIN_DAYS_TO_RESOLVE = 1       # Skip markets resolving < 1 day away (too late)
 
+# ── Price Momentum (FEAT-04) ──────────────────────────────────
+MOMENTUM_CONFIRM_DISCOUNT = 0.01   # reduce required edge 1% when momentum confirms direction
+MOMENTUM_OPPOSE_PENALTY   = 0.02   # raise required edge 2% when momentum opposes direction
+MOMENTUM_MIN_MAGNITUDE    = 0.03   # ignore moves < 3% (noise filter)
+
 # ── Scheduling ────────────────────────────────────────────────
 # How often the bot scans for opportunities (in seconds)
 SCAN_INTERVAL_SECONDS = 600   # Every 10 minutes — markets move slowly, saves ~90% API cost

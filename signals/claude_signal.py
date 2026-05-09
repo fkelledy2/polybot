@@ -17,6 +17,7 @@ from config import (
     MAX_DAYS_TO_RESOLVE, MIN_DAYS_TO_RESOLVE, CLAUDE_MODEL,
     MIN_EDGE_TO_TRADE_EXTREME, EXTREME_PRICE_THRESHOLD,
     ENABLE_WALLET_VETO, WALLET_VETO_ON_EXTREME,
+    MOMENTUM_CONFIRM_DISCOUNT, MOMENTUM_OPPOSE_PENALTY, MOMENTUM_MIN_MAGNITUDE,
 )
 from signals.categorizer import get_category_context, detect_category, CATEGORY_CONTEXT
 
@@ -205,6 +206,18 @@ def _build_signal(market: dict, result: dict, wallet_signals: list[dict] = None,
         )
         if yes_price_is_extreme:
             effective_min = max(effective_min, MIN_EDGE_TO_TRADE_EXTREME)
+
+        # ── FEAT-04: Price momentum modifier ─────────────────────
+        velocity = market.get("price_velocity_24h")
+        if velocity is not None and abs(velocity) >= MOMENTUM_MIN_MAGNITUDE:
+            momentum_confirms = (direction == "YES" and velocity > 0) or \
+                                (direction == "NO"  and velocity < 0)
+            if momentum_confirms:
+                effective_min = max(0.02, effective_min - MOMENTUM_CONFIRM_DISCOUNT)
+                logger.debug(f"Momentum confirms {direction}: vel={velocity:+.1%} bar→{effective_min:.0%}")
+            else:
+                effective_min = effective_min + MOMENTUM_OPPOSE_PENALTY
+                logger.debug(f"Momentum opposes {direction}: vel={velocity:+.1%} bar→{effective_min:.0%}")
 
         should_trade = (
             abs_edge >= effective_min
