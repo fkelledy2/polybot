@@ -20,6 +20,7 @@ from risk.manager import RiskManager
 from signals.claude_signal import (batch_analyse_markets, confirm_high_edge_signals,
                                     batch_reanalyse_open_positions, poll_batch_results)
 from signals.clustering import cluster_markets
+from signals.wallet_surge import WalletSurgeDetector
 from signals.resolution_scorer import score_ambiguity
 from signals.arbitrage import find_arbitrage_pairs
 from web.app import install_log_handler, run_server, shared_state, update_signals
@@ -81,6 +82,8 @@ def main():
         update_signals([], [], len(elite_wallets), elite_wallets)
     else:
         logger.info("Wallet tracking disabled (Polymarket leaderboard API unavailable)")
+
+    surge_detector = WalletSurgeDetector()
 
     scan_count  = 0
     batch_id_pending: str | None = None
@@ -192,14 +195,38 @@ def main():
             if added:
                 logger.info(f"Added {added} elite-discovered markets to analysis queue")
 
+        # FEAT-06: detect wallet surges (diff vs previous scan's consensus)
+        wallet_surges: dict = {}
+        if ENABLE_WALLET_TRACKING:
+            wallet_surges = surge_detector.detect(wallet_consensus)
+
         # ── 3. Enrich markets ─────────────────────────────────
         enrichment = enrich_markets(markets_parsed)
+
+        # Build condition_id → market_id map for surge merge
+        cid_to_mid = {
+            m.get("condition_id"): m["market_id"]
+            for m in markets_parsed
+            if m.get("condition_id")
+        }
+
         # Merge arbitrage notes into enrichment
         for mid, note in arb_notes.items():
             if enrichment.get(mid):
                 enrichment[mid] = enrichment[mid] + " | " + note
             else:
                 enrichment[mid] = note
+
+        # Merge wallet surge signals into enrichment
+        for cid, surge in wallet_surges.items():
+            mid = cid_to_mid.get(cid)
+            if not mid:
+                continue
+            surge_str = surge.to_enrichment_str()
+            if enrichment.get(mid):
+                enrichment[mid] = enrichment[mid] + " | " + surge_str
+            else:
+                enrichment[mid] = surge_str
 
         # ── 4. Claude analysis ────────────────────────────────
         all_signals, signals = batch_analyse_markets(
