@@ -26,6 +26,13 @@ _AMBIGUITY_SIGNALS = [
     (r"\breasonable\b",                                           0.10),
     (r"\bmay\b.{0,30}\bor\s+may\s+not\b",                        0.15),
     (r"\bmajor\b",                                                0.08),
+    # IPO / valuation markets where pricing depends on real-time financials
+    # Claude's training data is always at least several months stale for these.
+    (r"\bipo\b",                                                  0.20),
+    (r"\bmarket\s+cap\b.{0,60}\bipo\b",                           0.25),
+    (r"\bvaluation\b.{0,60}\bipo\b",                              0.25),
+    (r"\bipo\b.{0,60}\bmarket\s+cap\b",                           0.25),
+    (r"\bipo\b.{0,60}\bvaluation\b",                              0.25),
 ]
 
 _CLARITY_SIGNALS = [
